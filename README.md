@@ -8,6 +8,23 @@ HomeLimiter 0.1 is an initial implementation, not a production-certified network
 The default is **MONITOR ONLY**. Demo policies are explicitly simulated.
 A Windows PC or a bridged/NAT Kali VM cannot control other household devices merely by sharing their network.
 
+## Implemented
+
+- Passive IPv4/IPv6 neighbor inventory within explicitly authorized ranges, persistent
+  nicknames, identity confirmation, collision detection, and protected devices.
+- Authenticated local API and responsive dashboard: overview, devices/details,
+  bandwidth, access, scheduling, agents, diagnostics, audit logs and settings.
+- Separate upload/download caps, internet pauses, expiry, weekly overnight windows,
+  timezone/DST handling, conflict resolution and restart reconciliation.
+- Typer CLI with exact targets, confirmations, dry runs and emergency restoration.
+- Experimental Linux routed agent using owned nftables tables, HTB/fq_codel and IFB,
+  verified TLS or loopback SSH transport, rollback and a controller-loss lease watchdog.
+- Windows/Linux installers, dependency lock/audit and isolated namespace/browser CI.
+
+Inline bridge enforcement, live throughput counters, DHCP/router integrations, and
+automated proof of full traffic coverage remain future work. See the
+[capability matrix](docs/SUPPORTED_CAPABILITIES.md) and [roadmap](docs/ROADMAP.md).
+
 ## Quick start
 
 ```powershell
@@ -32,3 +49,6 @@ python -m ruff check src tests
 
 The dashboard uses accessible HTML, CSS, and JavaScript modules served by FastAPI.
 No Node toolchain or Docker is required. See [contributing](CONTRIBUTING.md).
+
+The [testing guide](docs/TESTING.md) describes opt-in real browser and dual-stack
+namespace tests. Never run disruptive validation against a live household network.
