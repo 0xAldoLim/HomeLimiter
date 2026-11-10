@@ -34,6 +34,7 @@ def item():
             status="online",
             mac="02:00:00:00:00:02",
             addresses=["192.0.2.2", "2001:db8::2"],
+            address_status={"192.0.2.2": "online", "2001:db8::2": "online"},
         ),
         download_mbps=2,
         upload_mbps=1,
@@ -52,6 +53,8 @@ def test_firewall_is_isolated_and_dual_stack(config, item, tmp_path):
     filters = [c for c in commands if "flower" in c]
     assert len(filters) == 4
     assert all("skip_hw" in c for c in filters)
+    assert len({(c[c.index("protocol") + 1], c[c.index("pref") + 1]) for c in filters}) == 2
+    assert len({c[c.index("pref") + 1] for c in filters}) == 2
     assert any("src_ip" in c and "hlifb0" in c for c in filters)
     assert any("dst_ip" in c and "lan0" in c for c in filters)
     assert all(isinstance(c, list) for c in commands)
@@ -113,6 +116,10 @@ def test_live_neighbor_binding_and_exclusions(config, item, tmp_path, monkeypatc
     observed = item.device.model_copy(deep=True)
     monkeypatch.setattr(engine, "discover", lambda: [observed])
     engine.validate_targets([item])
+    observed.address_status["2001:db8::2"] = "unknown"
+    with pytest.raises(AdapterError, match="matching neighbor"):
+        engine.validate_targets([item])
+    observed.address_status["2001:db8::2"] = "online"
     observed.mac = "02:00:00:00:00:03"
     with pytest.raises(AdapterError, match="matching neighbor"):
         engine.validate_targets([item])
@@ -130,6 +137,21 @@ def test_live_neighbor_binding_and_exclusions(config, item, tmp_path, monkeypatc
 def test_insecure_agent_configuration_refused(url):
     with pytest.raises(ValueError):
         Settings(adapter="gateway", agent_url=url, agent_token_file="not-read")
+
+
+@pytest.mark.parametrize("rate", [-1, 0, float("nan"), float("inf"), 10001])
+def test_agent_rejects_invalid_wire_rates(item, rate):
+    with pytest.raises(ValueError):
+        Effective(device=item.device, upload_mbps=rate)
+
+
+def test_empty_snapshot_can_restore_with_invalid_topology(config, tmp_path, monkeypatch):
+    engine = LinuxEngine(config, tmp_path)
+    monkeypatch.setattr(engine, "preflight", lambda: (_ for _ in ()).throw(AdapterError("topology changed")))
+    recovered = []
+    monkeypatch.setattr(engine, "recover", lambda: recovered.append(True))
+    assert engine.apply(Snapshot())["installed"]
+    assert recovered
 
 
 def test_agent_transport_authenticated(config, item, tmp_path, monkeypatch):

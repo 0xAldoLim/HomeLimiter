@@ -235,7 +235,12 @@ class LinuxEngine:
                 if not any(address.version == n.version and address in n for n in cidrs):
                     raise AdapterError("Target outside explicitly authorized networks")
                 observed = bindings.get(str(address), [])
-                if len(observed) != 1 or observed[0].mac != device.mac or observed[0].status != "online":
+                if (
+                    len(observed) != 1
+                    or observed[0].mac != device.mac
+                    or observed[0].status != "online"
+                    or observed[0].address_status.get(str(address)) != "online"
+                ):
                     raise AdapterError("Target address has no fresh, unique matching neighbor binding")
                 routes = self.runner.json(["ip", "-j", f"-{address.version}", "route", "get", str(address)])
                 if not routes or routes[0].get("dev") != self.config.lan or routes[0].get("type") == "local":
@@ -327,7 +332,7 @@ class LinuxEngine:
                             "protocol",
                             "ip" if address.version == 4 else "ipv6",
                             "pref",
-                            str(index),
+                            str(index * 2 + (address.version == 6)),
                             "flower",
                             "skip_hw",
                             selector,

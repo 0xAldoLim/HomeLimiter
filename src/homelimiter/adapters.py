@@ -111,6 +111,9 @@ class ReadOnlyAdapter(RouterAdapter):
                     device.addresses.append(address)
                 if states & {"REACHABLE", "PERMANENT", "5", "6"}:
                     device.status = "online"
+                    device.address_status[str(address)] = "online"
+                else:
+                    device.address_status[str(address)] = "unknown"
                 device.protected |= str(address) in own or str(address) in self.settings.protected_addresses
             except (ValueError, ValidationError):
                 continue

@@ -37,6 +37,7 @@ class Device(Model):
     id: str
     nickname: str = Field(default="Unknown device", min_length=1, max_length=80)
     addresses: list[IPvAnyAddress] = Field(default_factory=list, max_length=64)
+    address_status: dict[str, str] = Field(default_factory=dict, max_length=64)
     mac: str | None = None
     interface: str = ""
     source: str
@@ -132,8 +133,8 @@ class DeviceUpdate(Model):
 
 class Effective(Model):
     device: Device
-    download_mbps: float | None = None
-    upload_mbps: float | None = None
+    download_mbps: float | None = Field(default=None, ge=0.008, le=10000, allow_inf_nan=False)
+    upload_mbps: float | None = Field(default=None, ge=0.008, le=10000, allow_inf_nan=False)
     blocked: bool = False
 
 
