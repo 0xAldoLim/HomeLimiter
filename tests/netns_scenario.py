@@ -20,7 +20,22 @@ def main():
         )
 
     for address in ("198.51.100.2", "2001:db8:2::2"):
-        assert probe("ping", "-c", "1", "-W", "2", address).returncode == 0
+        baseline = probe("ping", "-c", "2", "-W", "2", address)
+        assert baseline.returncode == 0, json.dumps(
+            {
+                "target": address,
+                "stdout": baseline.stdout,
+                "stderr": baseline.stderr,
+                "gateway_addresses": subprocess.run(
+                    ["ip", "-j", "address"], capture_output=True, text=True
+                ).stdout,
+                "gateway_ipv6_routes": subprocess.run(
+                    ["ip", "-j", "-6", "route"], capture_output=True, text=True
+                ).stdout,
+                "client_ipv6_addresses": probe("ip", "-j", "-6", "address").stdout,
+                "client_ipv6_routes": probe("ip", "-j", "-6", "route").stdout,
+            }
+        )
     config = AgentConfig(
         lan="lan0",
         wan="wan0",
