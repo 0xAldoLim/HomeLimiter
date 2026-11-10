@@ -127,3 +127,22 @@ def test_invalid_policy(values):
 def test_bad_zone():
     with pytest.raises(ValidationError):
         Window(timezone="Mars/Olympus", start="10:00", end="11:00")
+
+
+def test_address_collision_suspends_identity(service, monkeypatch):
+    observed = service.adapter.discover_devices()
+    observed[2].addresses = observed[1].addresses.copy()
+    monkeypatch.setattr(service.adapter, "discover_devices", lambda: observed)
+    service.refresh()
+    assert service.device("demo-2").status == "ambiguous"
+    assert not service.device("demo-2").confirmed
+    with pytest.raises(PolicyError, match="unambiguous"):
+        service.add_policy(request())
+
+
+def test_renamed_identity_is_not_merged(service, monkeypatch):
+    observed = service.adapter.discover_devices()
+    observed[1].mac = "02:11:22:33:44:55"
+    monkeypatch.setattr(service.adapter, "discover_devices", lambda: observed)
+    service.refresh()
+    assert not service.device("demo-2").confirmed

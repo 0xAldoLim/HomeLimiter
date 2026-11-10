@@ -30,3 +30,13 @@ def test_error_and_secret_redaction(client):
     assert client.post("/api/emergency", json={"confirm": False}).status_code == 409
     assert "token" not in client.get("/api/settings").text
     assert client.get("/").headers["content-security-policy"].startswith("default-src 'self'")
+
+
+def test_chunked_body_limit(client):
+    result = client.request(
+        "POST",
+        "/api/discover",
+        content=(b"x" * 4096 for _ in range(20)),
+        headers={"Content-Type": "application/json"},
+    )
+    assert result.status_code == 413

@@ -86,7 +86,10 @@ def initialize(root: Path) -> str:
     config = root / "config.json"
     if not config.exists():
         config.write_text(Settings().model_dump_json(indent=2), encoding="utf-8")
-    return token_path.read_text(encoding="utf-8").strip()
+    token = token_path.read_text(encoding="utf-8").strip()
+    if len(token) < 32:
+        raise ValueError("Admin credential is too short; restore or regenerate the private token file")
+    return token
 
 
 def load_settings(root: Path, demo=False) -> Settings:

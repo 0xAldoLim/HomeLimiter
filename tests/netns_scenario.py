@@ -47,6 +47,25 @@ def main():
     engine = LinuxEngine(config, Path(root))
     engine.runner.run(["nft", "add", "table", "inet", "test_guard"])
     target = next(d for d in engine.discover() if "192.0.2.2" in [str(a) for a in d.addresses])
+    # Pin bindings only inside this disposable fixture. Avoid NUD DELAY/STALE timer
+    # transitions interfering with rate measurements; production requires fresh bindings.
+    for address in target.addresses:
+        engine.runner.run(
+            [
+                "ip",
+                f"-{address.version}",
+                "neigh",
+                "replace",
+                str(address),
+                "lladdr",
+                target.mac,
+                "nud",
+                "permanent",
+                "dev",
+                "lan0",
+            ]
+        )
+    target = next(d for d in engine.discover() if d.id == target.id)
     target.confirmed = True
     policy = Effective(device=target, download_mbps=2, upload_mbps=2)
     engine.apply(Snapshot(policies=[policy]))

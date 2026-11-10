@@ -155,6 +155,16 @@ class LinuxEngine:
             routes = self.runner.json(["ip", "-j", f"-{version}", "route", "show", "default"])
             if not routes or any(route.get("dev") != self.config.wan for route in routes):
                 raise AdapterError(f"IPv{version} default route must exclusively use the configured WAN")
+            rules = self.runner.json(["ip", "-j", f"-{version}", "rule", "show"])
+            if any(
+                rule.get("priority") not in {0, 32766, 32767}
+                or rule.get("table") not in {"local", "main", "default"}
+                or rule.get("src", "all") != "all"
+                for rule in rules
+            ):
+                raise AdapterError(
+                    "Policy routing requires additional path verification and is not supported"
+                )
         self._table()
         self._ifb_exists()
         ruleset = self.runner.json(["nft", "-j", "list", "ruleset"])
@@ -389,6 +399,9 @@ class LinuxEngine:
 
     def apply(self, snapshot: Snapshot):
         with self.lock:
+            if not snapshot.policies:
+                self.recover()
+                return {"installed": True, "traffic_verified": False, "lease_seconds": 0}
             self.preflight()
             self.validate_targets(snapshot.policies)
             previous = [p.model_copy(deep=True) for p in self.policies]
