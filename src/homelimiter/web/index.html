@@ -1,36 +1,147 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark"><title>HomeLimiter · Your network, considered</title>
-  <link rel="stylesheet" href="/static/style.css"><script type="module" src="/static/app.js"></script>
-</head>
-<body>
-  <div id="login" class="login-shell">
-    <form id="login-form" class="login-card">
-      <div class="brand-mark">H<span>·</span></div><p class="eyebrow">HOMELIMITER / LOCAL ADMINISTRATION</p>
-      <h1>A little more<br>balance at home.</h1>
-      <p class="muted">Understand your devices. Set thoughtful limits.<br>Stay in control of your own network.</p>
-      <label for="token">Admin token</label><input id="token" type="password" autocomplete="off" required placeholder="Paste your local admin token">
-      <p class="hint">Find it with <code>homelimiter token</code>. Your token stays in this tab's memory.</p>
-      <button type="submit" class="primary">Open your dashboard <span>↗</span></button><p id="login-error" role="alert"></p>
-      <div class="login-footer"><span class="dot"></span> Local by default. Private by design.</div>
-    </form>
-    <div class="login-art" aria-hidden="true"><div class="orbit one"></div><div class="orbit two"></div><div class="orbit three"></div><div class="art-core">H.</div><span class="art-label">A CLEARER CONNECTION</span></div>
-  </div>
-  <div id="app" class="app-shell" hidden>
-    <aside class="sidebar">
-      <a href="#overview" class="brand"><span class="brand-mark small">H<span>·</span></span><strong>HomeLimiter</strong></a>
-      <p class="nav-label">YOUR NETWORK</p><nav id="navigation" aria-label="Main navigation"></nav>
-      <div class="sidebar-bottom"><div class="local-badge"><span class="dot"></span><div><strong>Local workspace</strong><small>Private · No telemetry</small></div></div><button id="logout" class="quiet">Lock dashboard ↗</button></div>
-    </aside>
-    <div class="workspace">
-      <header class="topbar"><span class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumb">Overview</strong></span><div class="top-actions"><span id="mode" class="badge"></span><button id="theme" class="icon-button" aria-label="Toggle color theme">◐</button><span class="avatar">HL</span></div></header>
-      <main id="main" tabindex="-1"></main>
-      <footer class="workspace-footer"><span>HomeLimiter <span class="muted">/ 0.1.0</span></span><span>Made for a more balanced network.</span></footer>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Local device inventory, bandwidth policies and access scheduling through an authorized network gateway."
+    />
+    <title>HomeLimiter | Network administration</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script type="module" src="/static/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div id="login" class="login-shell">
+      <form id="login-form" class="login-card">
+        <a class="login-wordmark" href="#overview" aria-label="HomeLimiter home"
+          >HomeLimiter</a
+        >
+        <h1>Know your network.<br />Choose its limits.</h1>
+        <p class="muted">
+          Inspect connected devices and manage policies through an authorized
+          gateway.
+        </p>
+        <label for="token">Admin token</label
+        ><input
+          id="token"
+          type="password"
+          autocomplete="off"
+          aria-describedby="login-error"
+          required
+          placeholder="Paste your local admin token"
+        />
+        <p class="hint">
+          Find it with <code>homelimiter token</code>. Your token stays in this
+          tab’s memory.
+        </p>
+        <button type="submit" class="primary">Open your dashboard</button>
+        <p id="login-error" role="alert"></p>
+        <div class="login-footer">Local by default. Private by design.</div>
+      </form>
+      <section class="login-art" aria-label="HomeLimiter operating modes">
+        <h2>Control starts with the traffic path.</h2>
+        <dl class="login-modes">
+          <div>
+            <dt>Controller</dt>
+            <dd>Windows or Linux</dd>
+          </div>
+          <div>
+            <dt>Monitor only</dt>
+            <dd>Device inventory and diagnostics</dd>
+          </div>
+          <div>
+            <dt>Linux gateway</dt>
+            <dd>Authorized bandwidth and access controls</dd>
+          </div>
+          <div>
+            <dt>Demo mode</dt>
+            <dd>Simulated devices and policies</dd>
+          </div>
+        </dl>
+        <p>
+          No router-specific API. No hidden interception. No external telemetry.
+        </p>
+      </section>
     </div>
-  </div>
-  <dialog id="modal"><form id="modal-form"><div id="modal-body"></div><div class="dialog-actions"><button type="button" id="modal-cancel" class="secondary">Cancel</button><button type="submit" id="modal-submit" class="primary">Confirm</button></div></form></dialog>
-  <div id="toast" role="status" hidden></div>
-</body>
+    <div id="app" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a href="#overview" class="brand" aria-label="HomeLimiter home"
+          >HomeLimiter</a
+        >
+        <div class="sidebar-bottom">
+          <div class="local-badge">
+            <span>Local workspace</span><small>No telemetry</small>
+          </div>
+          <button id="logout" class="quiet" type="button">
+            Lock dashboard
+          </button>
+        </div>
+        <details class="navigation-disclosure" open>
+          <summary>Navigation</summary>
+          <nav id="navigation" aria-label="Main navigation"></nav>
+        </details>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <span class="breadcrumb"
+            >Workspace <span>/</span>
+            <strong id="breadcrumb">Overview</strong></span
+          >
+          <div class="top-actions">
+            <span id="mode" class="badge" role="status"></span
+            ><button
+              id="theme"
+              class="icon-button"
+              type="button"
+              aria-label="Toggle color theme"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+              >
+                <path d="M12 3a9 9 0 1 0 0 18V3Z" fill="currentColor" />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1"></main>
+        <footer class="workspace-footer">
+          <span>HomeLimiter <span class="muted">/ 0.1.0</span></span
+          ><span>Local administration. Explicit control.</span>
+        </footer>
+      </div>
+    </div>
+    <dialog id="modal">
+      <form id="modal-form">
+        <div id="modal-body"></div>
+        <div class="dialog-actions">
+          <button type="button" id="modal-cancel" class="secondary">
+            Cancel</button
+          ><button type="submit" id="modal-submit" class="primary">
+            Confirm
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" role="status" hidden></div>
+    <noscript
+      ><p class="noscript-message">
+        JavaScript is required for the authenticated dashboard. The HomeLimiter
+        CLI remains available.
+      </p></noscript
+    >
+  </body>
 </html>

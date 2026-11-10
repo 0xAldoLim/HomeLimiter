@@ -50,5 +50,9 @@ python -m ruff check src tests
 The dashboard uses accessible HTML, CSS, and JavaScript modules served by FastAPI.
 No Node toolchain or Docker is required. See [contributing](CONTRIBUTING.md).
 
+The UI follows [Hallmark's Console material](https://github.com/Nutlope/hallmark) with
+local fonts, paper/graphite modes and a device ledger. See the shared [design system](design.md)
+and [redesign record](docs/UI_REDESIGN.md).
+
 The [testing guide](docs/TESTING.md) describes opt-in real browser and dual-stack
 namespace tests. Never run disruptive validation against a live household network.
