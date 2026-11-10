@@ -30,7 +30,9 @@ def test_disposable_dual_stack_gateway(tmp_path):
     iperf = None
 
     def run(*args):
-        return subprocess.run(args, check=True, text=True, capture_output=True, timeout=90)
+        result = subprocess.run(args, check=False, text=True, capture_output=True, timeout=90)
+        assert result.returncode == 0, f"{args}\n{result.stdout}\n{result.stderr}"
+        return result
 
     def ip(ns, *args):
         return run("ip", "-n", ns, *args)
