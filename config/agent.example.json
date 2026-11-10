@@ -1,0 +1,9 @@
+{
+  "lan": "lan0",
+  "wan": "wan0",
+  "authorized_cidrs": ["192.0.2.0/24", "2001:db8:1::/64"],
+  "protected_addresses": ["192.0.2.254"],
+  "exclusive_interfaces": false,
+  "topology_authorized": false,
+  "link_mbps": 1000
+}

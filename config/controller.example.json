@@ -1,0 +1,8 @@
+{
+  "adapter": "readonly",
+  "agent_url": null,
+  "agent_token_file": null,
+  "agent_ca_file": null,
+  "authorized_cidrs": [],
+  "protected_addresses": []
+}

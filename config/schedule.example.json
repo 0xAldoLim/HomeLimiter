@@ -1,0 +1,11 @@
+{
+  "device_id": "REPLACE_WITH_CONFIRMED_DEVICE_ID",
+  "label": "Weeknight quiet hours",
+  "blocked": true,
+  "window": {
+    "timezone": "Asia/Kuala_Lumpur",
+    "weekdays": [0, 1, 2, 3, 4],
+    "start": "22:30",
+    "end": "06:30"
+  }
+}
