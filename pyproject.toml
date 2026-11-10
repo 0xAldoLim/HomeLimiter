@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homelimiter"
+version = "0.1.0"
+description = "Transparent network management through authorized enforcement points"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{name = "0xAldoLim"}]
+dependencies = ["fastapi>=0.121,<1", "uvicorn>=0.38,<1", "pydantic>=2.12,<3", "typer>=0.20,<1", "httpx>=0.28,<1", "psutil>=7,<8", "tzdata>=2025.2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10", "pytest-cov>=7,<8", "ruff>=0.14,<1", "build>=1.3,<2", "pip-audit>=2.9,<3", "playwright>=1.56,<2"]
+
+[project.scripts]
+homelimiter = "homelimiter.cli:app"
+homelimiter-agent = "homelimiter.agent:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+homelimiter = ["web/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["network: disposable Linux namespaces; opt in with HOMELIMITER_NET_TESTS=1", "browser: browser end-to-end tests; opt in with HOMELIMITER_BROWSER_TESTS=1"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
