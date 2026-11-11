@@ -1,40 +1,35 @@
 # Architecture
 
+HomeLimiter uses a terminal interface by default. Textual provides keyboard focus,
+tables, dialogs and a headless test driver on Windows and Linux. Typer remains the
+noninteractive entry point. Both operate on the same Python policy and inventory
+services and existing SQLite state.
+
 ```mermaid
 flowchart LR
-    Browser[Local browser] -->|Bearer token, same origin| Controller[FastAPI controller]
-    CLI[Typer CLI] --> ControllerService[Shared policy service]
-    Controller --> ControllerService
-    ControllerService --> SQLite[(SQLite WAL)]
-    ControllerService --> Adapter[Capability-based adapter]
-    Adapter --> ReadOnly[Passive neighbor inventory]
-    Adapter --> Mock[Explicit demo simulation]
-    Adapter -->|TLS + bearer token| Agent[Linux agent]
-    Agent --> Scheduler[Independent lease watchdog]
-    Agent --> Kernel[nftables + tc HTB + IFB]
+    TUI[Textual terminal] --> Control[Shared controller operations]
+    CLI[Typer CLI] --> Control
+    TUI -. optional local connection .-> API[Headless loopback API]
+    CLI -. optional local connection .-> API
+    API --> Control
+    Runner[Controller scheduler] --> Control
+    Control --> DB[(SQLite)]
+    Control --> Adapter[Read-only, demo or gateway adapter]
+    Adapter -->|Verified TLS or loopback tunnel| Agent[Linux gateway agent]
+    Agent --> Kernel[nftables and tc]
+    Agent --> Lease[Independent lease watchdog]
 ```
 
-Python 3.12+, FastAPI/Pydantic, parameterized SQLite, Typer, psutil, HTTPX.
-Use standard-library SQLite rather than an ORM to keep transaction boundaries visible.
-A small bundled dashboard avoids a separate build or runtime on Windows.
+The controller runtime owns a process lock and the reconciliation loop, separately
+from presentation. A local session may run that runtime in its process. Explicit
+headless operation keeps it running after a terminal client exits. One runtime owns
+each state directory; connected clients use its authenticated loopback JSON API
+rather than opening competing writers. The agent is a separate privileged Linux
+process. Neither launch path provisions routes, forwarding, or an OS service.
 
-Controller desired policies and audit events are durable. A single process owns each
-state directory. Serialized reconciliation computes the most restrictive active policy
-per device (block wins, minimum rates win). Scheduling uses IANA zones, UTC instants,
-half-open windows, and start-day semantics for overnight windows. Reconciliation is
-idempotent and runs on restart and periodically. The agent receives a complete desired
-snapshot with a short renewable lease. On loss of the controller the agent removes
-restrictions after lease expiry; a stopped agent cannot provide that watchdog.
-
-Agent networking is opt-in and Linux-only. It never enables forwarding, constructs a
-gateway/bridge, configures NAT, or changes existing firewall policy. The operator must
-provision the path. All nft changes are confined to a named table with an ownership
-comment. Traffic control requires exclusive, explicitly delegated interfaces and a
-dedicated IFB; existing custom root/ingress disciplines cause refusal. Upload shaping
-on LAN ingress via IFB precedes SNAT, while download shaping is on LAN egress.
-This avoids WAN address classification after NAT. Failure triggers restoration of
-the previous owned policy snapshot; failed restoration is reported, never hidden.
-
-There is no claim of hardware-verified enforcement just because commands succeeded.
-Agent capability, configured state, installed state, and actual traffic measurements
-are distinct. Kernel integration validation is required before use on a real gateway.
+The browser dashboard is being retired because it duplicated presentation concerns
+and coupled normal startup to an HTTP server. Only the headless control and agent
+protocols need FastAPI/Uvicorn. The default TUI does not open a listening socket.
+Preserve existing policy files, database state, explicit target confirmation and the
+agent's bounded renewable lease. An acknowledged snapshot is not proof of traffic
+coverage. See [the audit](AUDIT.md) and [supported capabilities](SUPPORTED_CAPABILITIES.md).

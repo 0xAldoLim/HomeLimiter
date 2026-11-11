@@ -1,7 +1,10 @@
 # HomeLimiter contributor instructions
 
-Use the installed [Hallmark](https://github.com/Nutlope/hallmark) skill for the dashboard redesign and future new UI screens. This is a working network administration app: use Hallmark's app-screen scope and preserve every route, data call, field, authentication hook, confirmation and behavior test.
+Keep policy validation and enforcement in shared services; terminal, CLI and API
+handlers should call those services. Preserve explicit target confirmation, protected
+infrastructure checks, bounded leases and rollback. Never invent throughput,
+neighbor reachability or traffic-path verification.
 
-The previous sage sidebar and rounded summary-card presentation is being superseded at the user's request. Read `design.md` for the replacement system once it exists. Do not reinterpret the app as a marketing landing page or invent throughput, devices, enforcement success, vendor information or traffic-path verification.
-
-Keep the controller and enforcement safety constraints in SECURITY.md. Validate presentation changes with the existing real browser workflow and Hallmark's static/render checks. No validation may alter the user's live network.
+Run the portable tests and Ruff before committing. Privileged tests must run only
+in disposable Linux namespaces. Never test on a live household network. Update the
+relevant setup and capability documentation when behavior changes.
