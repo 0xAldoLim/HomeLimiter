@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
@@ -19,8 +18,6 @@ from .runtime import Runtime
 from .security import BodyLimitMiddleware
 from .service import PolicyError, Service
 
-WEB = Path(__file__).parent / "web"
-
 
 def create_app(
     root: Path | None = None,
@@ -30,7 +27,6 @@ def create_app(
     token: str | None = None,
     background=True,
     runtime: Runtime | None = None,
-    legacy_ui=False,
 ):
     root = root or state_dir(demo)
 
@@ -72,7 +68,7 @@ def create_app(
         response = await call_next(request)
         response.headers.update(
             {
-                "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+                "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
                 "X-Content-Type-Options": "nosniff",
                 "Referrer-Policy": "no-referrer",
                 "Cache-Control": "no-store",
@@ -188,11 +184,4 @@ def create_app(
         ctrl.emergency()
         return {"restored": True}
 
-    if legacy_ui:
-
-        @app.get("/")
-        def index():
-            return FileResponse(WEB / "index.html")
-
-        app.mount("/static", StaticFiles(directory=WEB), name="static")
     return app

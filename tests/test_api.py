@@ -29,7 +29,10 @@ def test_error_and_secret_redaction(client):
     assert client.get("/api/devices/missing").status_code == 404
     assert client.post("/api/emergency", json={"confirm": False}).status_code == 409
     assert "token" not in client.get("/api/settings").text
-    assert client.get("/").headers["content-security-policy"].startswith("default-src 'self'")
+    response = client.get("/")
+    assert response.status_code == 404
+    assert response.headers["content-security-policy"].startswith("default-src 'none'")
+    assert client.get("/static/app.js").status_code == 404
 
 
 def test_chunked_body_limit(client):

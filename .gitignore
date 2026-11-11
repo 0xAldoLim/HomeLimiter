@@ -16,5 +16,4 @@ build/
 *.key
 *.token
 state/
-playwright-report/
 test-results/

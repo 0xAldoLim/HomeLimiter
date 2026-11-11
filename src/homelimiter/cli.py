@@ -318,7 +318,7 @@ def emergency_restore(ctx: typer.Context, yes: bool = typer.Option(False, "--yes
         typer.echo("HomeLimiter restrictions restored.")
 
 
-def run_server(ctx, port, *, legacy_ui=False):
+def run_server(ctx, port):
     import uvicorn
 
     from .api import create_app
@@ -328,7 +328,7 @@ def run_server(ctx, port, *, legacy_ui=False):
     with checked(), Runtime(ctx.obj["root"], ctx.obj["demo"]) as runtime:
         typer.echo(f"Headless controller at 127.0.0.1:{port}. Keep this process running for schedules.")
         uvicorn.run(
-            create_app(runtime=runtime, legacy_ui=legacy_ui),
+            create_app(runtime=runtime),
             host="127.0.0.1",
             port=port,
             access_log=False,
@@ -341,12 +341,6 @@ def run_server(ctx, port, *, legacy_ui=False):
 def serve(ctx: typer.Context, port: int = typer.Option(8787, min=1024, max=65535)):
     """Run the scheduler and authenticated loopback control API without a TUI."""
     run_server(ctx, port)
-
-
-@app.command()
-def dashboard(ctx: typer.Context, port: int = typer.Option(8787, min=1024, max=65535)):
-    """Start the legacy dashboard while migrating to the terminal."""
-    run_server(ctx, port, legacy_ui=True)
 
 
 if __name__ == "__main__":

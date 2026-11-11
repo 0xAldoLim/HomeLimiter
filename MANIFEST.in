@@ -1,7 +1,6 @@
 include LICENSE README.md SECURITY.md CONTRIBUTING.md requirements-dev.lock
-include THIRD_PARTY_NOTICES.md AGENTS.md design.md
-recursive-include docs *.md
+include AGENTS.md run.ps1 run.sh
+recursive-include docs *.md *.svg
 recursive-include config *.json
-recursive-include scripts *.ps1 *.sh
+recursive-include scripts *.py
 recursive-include tests *.py
-recursive-include src/homelimiter/web *.html *.css *.js *.ttf *.txt

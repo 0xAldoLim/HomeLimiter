@@ -22,8 +22,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e '.[dev]'
-      - run: python -m ruff check src tests
-      - run: python -m ruff format --check src tests
+      - run: python -m ruff check src tests scripts
+      - run: python -m ruff format --check src tests scripts
       - run: python -m pytest -q --junitxml=test-results/controller.xml
       - run: python -m build
       - uses: actions/upload-artifact@v4
@@ -31,23 +31,36 @@ jobs:
         with:
           name: controller-${{ matrix.os }}-${{ matrix.python }}
           path: test-results/
-  browser:
-    runs-on: ubuntu-latest
+  launchers:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e '.[dev]'
-      - run: python -m playwright install --with-deps chromium
-      - run: python -m pytest tests/test_browser.py tests/test_dashboard_states.py -q --junitxml=test-results/browser.xml
-        env:
-          HOMELIMITER_BROWSER_TESTS: '1'
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser
-          path: test-results/
+      - name: Fresh Linux startup and reuse
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          first="$(./run.sh --home "$RUNNER_TEMP/launcher" --demo check)"
+          [[ "$first" == *"Installing HomeLimiter dependencies"* ]]
+          second="$(./run.sh --home "$RUNNER_TEMP/launcher" --demo devices)"
+          [[ "$second" != *"Installing HomeLimiter dependencies"* && "$second" == *'"demo-2"'* ]]
+          .venv/bin/python -m pip check
+      - name: Fresh Windows startup and reuse
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $state = Join-Path $env:RUNNER_TEMP 'launcher'
+          $first = .\run.ps1 --home $state --demo check | Out-String
+          if ($LASTEXITCODE -ne 0 -or $first -notmatch 'Installing HomeLimiter dependencies') { throw $first }
+          $second = .\run.ps1 --home $state --demo devices | Out-String
+          if ($LASTEXITCODE -ne 0 -or $second -match 'Installing HomeLimiter dependencies' -or $second -notmatch '"demo-2"') { throw $second }
+          .\.venv\Scripts\python.exe -m pip check
   isolated-network:
     runs-on: ubuntu-latest
     steps:
