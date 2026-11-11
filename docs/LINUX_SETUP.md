@@ -1,6 +1,6 @@
 # Linux controller and experimental gateway agent
 
-Install Python 3.12+ and your distribution's venv support. Run `bash scripts/install-linux.sh`
+Install Python 3.12+ and your distribution's venv support. Run `./run.sh`
 as your ordinary user. On Kali, use the venv; do not use `--break-system-packages` or
 `sudo pip`. The controller does not need root. The agent needs Linux networking privilege.
 
@@ -30,13 +30,21 @@ addresses/interface names. Protect the management controller address, upstream g
 and critical infrastructure. All local agent addresses are excluded automatically.
 Only set `topology_authorized` and `exclusive_interfaces` to true after delegation.
 
+For a gateway outside a disposable test VM, the administrator should install a
+reviewed wheel and its dependencies into a dedicated, root-owned venv such as
+`/opt/homelimiter-agent`. Keep the installation, configuration and state
+unwritable by unprivileged accounts. Do not run a user-writable editable checkout
+as root on a gateway. The ordinary controller can still use its local launcher.
+
 ```sh
-# Manual opt-in launch on an already provisioned test gateway:
-sudo .venv/bin/homelimiter-agent --config /absolute/path/agent.json --state /var/lib/homelimiter-agent
+# Manual opt-in launch from an administrator-controlled installation:
+sudo /opt/homelimiter-agent/bin/homelimiter-agent --config /absolute/path/agent.json --state /var/lib/homelimiter-agent
 ```
 
 This binds to loopback port 8788. Read the separate token at the private agent state's
 `admin.token` as its administrator and securely provision the controller's token file.
+Use **Network → Setup wizard → Existing authorized gateway agent** to supply the
+origin and token file. The wizard checks readiness and does not modify Linux networking.
 For non-loopback binding, `--tls-cert` and `--tls-key` are required. Use a certificate
 trusted by the controller, restrict agent port access, and prefer a dedicated service
 account/capability deployment reviewed for your distribution. A generic systemd/root
@@ -45,14 +53,15 @@ service is deliberately not installed automatically.
 ## Recovery
 
 Graceful agent shutdown and agent restart remove owned resources. The running agent's
-watchdog removes them on controller lease expiry (90 seconds, refreshed every 15 seconds).
+watchdog removes them on controller lease expiry (90 seconds, refreshed about every
+15 seconds by a healthy local terminal session or headless controller).
 If the agent is killed, kernel rules can remain until restart/manual recovery; no
 watchdog can run inside a dead process. Do not delete the ownership journal.
 
 ```sh
 # Stop the agent process first, then recover using the SAME config/state:
-sudo .venv/bin/homelimiter-agent --config /absolute/path/agent.json --state /var/lib/homelimiter-agent --recover
-# Remove desired policies too, with the controller stopped:
+sudo /opt/homelimiter-agent/bin/homelimiter-agent --config /absolute/path/agent.json --state /var/lib/homelimiter-agent --recover
+# Remove desired policies too, with the controller stopped or through --connect:
 .venv/bin/homelimiter emergency-restore --yes
 ```
 

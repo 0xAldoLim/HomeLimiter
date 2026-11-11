@@ -1,26 +1,24 @@
 # Testing
 
-Run ordinary unit/protocol tests as an unprivileged user:
+Run the unprivileged suite and package checks in the development venv:
 
 ```sh
 python -m pytest
-python -m ruff check src tests
-python -m ruff format --check src tests
+python -m ruff check src tests scripts
+python -m ruff format --check src tests scripts
 python -m build
 ```
 
-Opt into actual browser tests against a disposable local demo instance:
+Textual's headless driver exercises the real keyboard workflows at 80×24 and 68×20:
+inventory, protected devices, form validation, cancellation, policy creation and
+removal, schedule editing, first-run scope selection and setup rerun. Use a temporary
+state directory and the demo profile when testing an interactive launch. The API
+suite uses in-process test clients; CI also checks that both launchers can create and
+reuse a fresh environment.
 
-```sh
-python -m playwright install chromium
-HOMELIMITER_BROWSER_TESTS=1 python -m pytest tests/test_browser.py
-```
-
-On Windows PowerShell set `$env:HOMELIMITER_BROWSER_TESTS='1'` first. To use an existing
-Chrome installation, set `HOMELIMITER_BROWSER_EXE` to its full executable path.
-The test launches a loopback server on a free port, uses a temporary state directory,
-and terminates it afterward. Optional `HOMELIMITER_SCREENSHOT` saves a desktop preview
-and sibling mobile screenshot. No tokens are stored in screenshots.
+Runtime tests verify renewal with no TUI client, graceful shutdown without deleting
+desired policies, re-evaluation after restart and expiry, failed discovery, and
+database/adapter rollback. They simulate agent failures. They do not measure traffic.
 
 ## Actual Linux kernel integration
 
@@ -31,14 +29,11 @@ iproute2, nftables, iperf3 and ping installed and IFB/HTB/fq_codel/flower/mirred
 sudo env HOMELIMITER_NET_TESTS=1 .venv/bin/python -m pytest tests/test_network.py -q -s
 ```
 
-The integration test constructs three uniquely named namespaces (client, gateway,
-server). Veth links are created directly inside them. Forwarding sysctls, nft tables,
-qdiscs and addresses are changed only inside the disposable gateway. It tests IPv4
-and IPv6 upload/download shaping with iperf3, pause/resume with ping, idempotent updates
-and preservation of an unrelated table. Cleanup removes only the namespaces it created.
-It must never use the live home network as a test target.
+Three unique network namespaces contain the client, gateway and server. Veth links,
+forwarding sysctls, nftables tables and qdiscs exist only inside these namespaces.
+The test measures IPv4/IPv6 shaping, pause/restoration, repeat application, and
+preservation of an unrelated table. Cleanup deletes only the namespaces it created.
 
 CI runs the controller suite/build on Windows and Ubuntu with Python 3.12 and 3.14,
-a Chromium browser workflow, and a privileged disposable namespace job. Inspect the
-actual Actions result before claiming the kernel integration passed. Tests cannot
-certify an operator's household wiring, alternate paths or hardware offload behavior.
+fresh launchers on both platforms, and the disposable namespace suite on Linux.
+A passing suite is not certification of an operator's physical topology.

@@ -1,5 +1,7 @@
 {
   "adapter": "readonly",
+  "onboarded": false,
+  "inventory_interface": null,
   "agent_url": null,
   "agent_token_file": null,
   "agent_ca_file": null,

@@ -19,9 +19,8 @@ It does not claim deployment-grade coverage of every household topology.
 7. Add a distribution-reviewed service sandbox/capability deployment for the agent and
    an external recovery watchdog for abrupt agent termination. Current root launch is
    manual; agent-death recovery requires restart or the documented recovery command.
-8. Add richer schedule editing, exception calendars, server-side shared presets and a
-   frontend component/unit suite as the bundled JavaScript dashboard grows. Current
-   real browser coverage exercises the principal workflow.
+8. Add exception calendars, configurable presets and audit/inventory retention. Continue
+   testing terminal workflows across screen readers, terminals and narrow windows.
 
 No remaining task authorizes changes to a user's actual network without explicit
 deployment/target approval. Spoofing, covert interception and global firewall resets

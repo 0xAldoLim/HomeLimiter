@@ -27,9 +27,11 @@ each state directory; connected clients use its authenticated loopback JSON API
 rather than opening competing writers. The agent is a separate privileged Linux
 process. Neither launch path provisions routes, forwarding, or an OS service.
 
-The browser dashboard is being retired because it duplicated presentation concerns
-and coupled normal startup to an HTTP server. Only the headless control and agent
+The terminal architecture replaces the browser dashboard so normal startup needs no
+HTTP server. Only the headless control and agent
 protocols need FastAPI/Uvicorn. The default TUI does not open a listening socket.
-Preserve existing policy files, database state, explicit target confirmation and the
-agent's bounded renewable lease. An acknowledged snapshot is not proof of traffic
-coverage. See [the audit](AUDIT.md) and [supported capabilities](SUPPORTED_CAPABILITIES.md).
+The database and policy schema remain compatible with existing state. Restrictions
+require explicit target confirmation and serialized reconciliation. The controller
+renews the bounded agent lease with fresh inventory and distinguishes saved policies,
+active time windows and agent acknowledgements. An acknowledgement is not proof of
+traffic coverage. See [the audit](AUDIT.md) and [supported capabilities](SUPPORTED_CAPABILITIES.md).

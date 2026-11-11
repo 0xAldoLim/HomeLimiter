@@ -1,58 +1,124 @@
 # HomeLimiter
 
-Router-agnostic network management through an **authorized traffic path**.
-Windows and Linux controller; separate Linux gateway agent. No spoofing,
-interception, router reconfiguration, telemetry, or hidden installation.
+HomeLimiter is a terminal tool for viewing devices and managing bandwidth and access on
+networks you administer. It works with any router brand. Actual restrictions require an
+authorized Linux gateway in the traffic path.
 
-HomeLimiter 0.1 is an initial implementation, not a production-certified network appliance.
-The default is **MONITOR ONLY**. Demo policies are explicitly simulated.
-A Windows PC or a bridged/NAT Kali VM cannot control other household devices merely by sharing their network.
+## Features
 
-## Implemented
+- Search and sort a passive device inventory; save nicknames, confirm identities and protect infrastructure.
+- Set separate upload/download caps, use speed presets, or pause access temporarily.
+- Create and edit bedtime, recurring and one-time rules. Review the next window change.
+- Check gateway availability, acknowledged rules, recovery events and audit history.
+- Practice in an isolated demo, or keep schedules running with the optional headless controller.
 
-- Passive IPv4/IPv6 neighbor inventory within explicitly authorized ranges, persistent
-  nicknames, identity confirmation, collision detection, and protected devices.
-- Authenticated local API and responsive dashboard: overview, devices/details,
-  bandwidth, access, scheduling, agents, diagnostics, audit logs and settings.
-- Separate upload/download caps, internet pauses, expiry, weekly overnight windows,
-  timezone/DST handling, conflict resolution and restart reconciliation.
-- Typer CLI with exact targets, confirmations, dry runs and emergency restoration.
-- Experimental Linux routed agent using owned nftables tables, HTB/fq_codel and IFB,
-  verified TLS or loopback SSH transport, rollback and a controller-loss lease watchdog.
-- Windows/Linux installers, dependency lock/audit and isolated namespace/browser CI.
+## Terminal preview
 
-Inline bridge enforcement, live throughput counters, DHCP/router integrations, and
-automated proof of full traffic coverage remain future work. See the
-[capability matrix](docs/SUPPORTED_CAPABILITIES.md) and [roadmap](docs/ROADMAP.md).
+![HomeLimiter's terminal device table in simulated demo mode](docs/tui-preview.svg)
 
-## Quick start
+Captured from the running Textual app with the simulated inventory.
+
+## Quick start: Windows
+
+Install Git and Python 3.12 or later. In PowerShell:
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev]"
-.venv\Scripts\homelimiter init
-.venv\Scripts\homelimiter dashboard
+git clone git@github.com:0xAldoLim/HomeLimiter.git
+cd HomeLimiter
+.\run.ps1
 ```
 
-Open http://127.0.0.1:8787 and paste the local admin token from `homelimiter token`.
-Use `homelimiter --demo dashboard` for a separate, simulated inventory.
-See [installation](docs/INSTALLATION.md), [capabilities](docs/SUPPORTED_CAPABILITIES.md),
-[architecture](docs/ARCHITECTURE.md), [security](SECURITY.md), and [research](docs/RESEARCH.md).
+Run `.\run.ps1 --demo` to practice. See [Windows setup](docs/WINDOWS_SETUP.md) if
+PowerShell blocks the script.
 
-## Development
+## Quick start: Linux or Kali
+
+Install Git, Python 3.12 or later, and its venv support (e.g. `python3-venv` on Kali):
+
+```bash
+git clone git@github.com:0xAldoLim/HomeLimiter.git
+cd HomeLimiter
+./run.sh
+```
+
+Run `./run.sh --demo` for the demo. If you haven't configured GitHub SSH, use
+`git clone https://github.com/0xAldoLim/HomeLimiter.git` on either OS.
+
+The first run installs dependencies in the checkout's `.venv`. It needs package download
+access. Later runs reuse it. The launchers do not install services or change network settings.
+
+## Basic usage
+
+The first launch guides you through checking the environment, choosing a mode, selecting
+an authorized scope, and reviewing cached device identities. Rerun it under **4 Network →
+Setup wizard**. For the demo, the protected management laptop is intentionally ineligible
+for restrictions.
+
+- **1–5** switches sections. **Tab** moves focus; **↑/↓** and **Enter** select a device or rule.
+- In **Devices**, open a row and choose **Identity**, **Limit**, **Pause**, or **Schedule**.
+  Review the exact target before saving. Choose **Saved policies** to remove a single
+  restriction, or **Restore all** to remove that device's rules and future schedules.
+- In **Schedules**, use **Enter** to edit or remove a rule. Window timing and enforcement
+  status are separate. **R** refreshes and **Q** exits.
+
+The installed `homelimiter` command opens the TUI. The same commands work through the
+launcher. For example:
 
 ```sh
-python -m pip install -e '.[dev]'
-python -m pytest
-python -m ruff check src tests
+homelimiter doctor
+homelimiter --demo devices
+homelimiter --demo limit demo-2 --download 5 --upload 2 --dry-run
+homelimiter --demo schedules
+homelimiter --demo logs
 ```
 
-The dashboard uses accessible HTML, CSS, and JavaScript modules served by FastAPI.
-No Node toolchain or Docker is required. See [contributing](CONTRIBUTING.md).
+For unattended schedules, start `homelimiter serve` in a separate terminal and leave it
+running. Open the TUI with `homelimiter --connect 8787` using the same profile. See
+[headless operation and recovery](docs/INSTALLATION.md#keep-schedules-running).
 
-The UI follows [Hallmark's Console material](https://github.com/Nutlope/hallmark) with
-local fonts, paper/graphite modes and a device ledger. See the shared [design system](design.md)
-and [redesign record](docs/UI_REDESIGN.md).
+## Supported modes
 
-The [testing guide](docs/TESTING.md) describes opt-in real browser and dual-stack
-namespace tests. Never run disruptive validation against a live household network.
+| Mode | What it can do |
+|---|---|
+| Monitor only | Read cached neighbors in explicitly authorized networks on Windows or Linux. |
+| Demo | Simulate four devices and policy effects in separate local state. |
+| Managed routed Linux gateway | Apply IPv4/IPv6 limits and access pauses through an authorized agent. Experimental, reported as **Partial control**. |
+| Managed bridge | Passive monitoring only. Inline bridge enforcement is unavailable. |
+
+## Limits
+
+An ordinary Windows laptop, VMware NAT guest or bridged VM cannot throttle unrelated LAN
+traffic. A device may use addresses or paths the agent cannot see. Installed rules do not
+certify end-to-end traffic coverage. Live throughput counters and router provisioning
+are unavailable. See [supported capabilities](docs/SUPPORTED_CAPABILITIES.md).
+
+## Architecture
+
+Textual and Typer share the controller's inventory, SQLite state and policy services.
+A separate runtime reconciles policies and renews the agent lease. The Linux agent owns
+its nftables and traffic control resources. [Architecture](docs/ARCHITECTURE.md) and
+[repository audit](docs/AUDIT.md) describe the boundaries.
+
+## Safety and permissions
+
+Use only networks you administer. Passive discovery sends no scan probes. HomeLimiter
+does not impersonate a gateway or configure forwarding, NAT or router paths. Keep
+infrastructure protected, and follow the [Linux setup and recovery guide](docs/LINUX_SETUP.md)
+before enabling real enforcement. The controller runs unprivileged; only the experimental
+Linux agent needs networking privilege. See [security](SECURITY.md).
+
+## Development and testing
+
+Use a venv and `python -m pip install -e '.[dev]'`. Run `python -m pytest`,
+`python -m ruff check src tests scripts`, and `python -m build`.
+[Testing](docs/TESTING.md) covers the terminal and the disposable Linux gateway suite.
+
+## Acknowledgments
+
+[EvilLimiter by bitbrute](https://github.com/bitbrute/evillimiter) inspired the terminal
+device management and bandwidth controls. HomeLimiter is independently implemented and
+uses an explicitly authorized routed gateway for enforcement.
+
+## License
+
+[MIT](LICENSE).

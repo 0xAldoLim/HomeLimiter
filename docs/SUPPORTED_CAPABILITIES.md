@@ -27,10 +27,14 @@ hardware offload, or client VPN/alternate physical links can invalidate traffic 
 Targets must be fresh, uniquely bound neighbor entries, confirmed by an administrator,
 inside allowed CIDRs, and outside exclusions. MAC randomization produces a new identity;
 there is no speculative merging. Unknown or stale observations suspend enforcement.
+Only fresh eligible addresses are sent for a target. The terminal shows acknowledged
+bindings separately from all observed addresses; an unobserved or unsuitable address
+may still have connectivity. Failed inventory refresh stops renewal until recovery.
 An inventory is not a complete household census. No active discovery, DHCP import,
 managed router adapter implementation, or OUI database is included yet.
 
 Intervals are half-open. Overnight weekly windows belong to their start day. Both
 occurrences of an ambiguous DST hour follow the local time window; nonexistent local
 times are skipped. A one-time policy uses explicit timezone-bearing instants. Conflicts
-are surfaced on creation: pause wins and the lowest rate in each direction wins.
+resolve consistently: pause wins and the lowest rate in each direction wins. The
+schedule preview shows the next change of a rule's window, independent of enforcement.

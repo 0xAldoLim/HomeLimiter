@@ -1,40 +1,71 @@
-# Installation
+# Installation and operation
 
-Requirements: Python 3.12+ and pip. No Docker, Node, router API or VMware is required
-for the controller. Development needs the optional `.[dev]` dependencies.
+Install Git and Python 3.12 or later. On Linux, install venv support for that interpreter.
+From the repository run `./run.sh` on Linux or `.un.ps1` in Windows PowerShell. The
+launcher creates a local `.venv` and installs declared dependencies on first run or
+when package metadata changes. No service or system networking configuration is installed.
+Use `HOMELIMITER_PYTHON` to select a full Python executable path for a new venv.
 
-```sh
-git clone git@github.com:0xAldoLim/HomeLimiter.git
-cd HomeLimiter
-python -m venv .venv
-# Windows:
-.venv\Scripts\python -m pip install -e .
-.venv\Scripts\homelimiter init
-.venv\Scripts\homelimiter token
-.venv\Scripts\homelimiter dashboard
-# Linux:
-.venv/bin/python -m pip install -e .
-.venv/bin/homelimiter init
-.venv/bin/homelimiter token
-.venv/bin/homelimiter dashboard
+Without the launcher, create a local venv using `python -m venv .venv`, then use
+`..venvScriptspython.exe -m pip install -e .` on Windows or
+`.venv/bin/python -m pip install -e .` on Linux. Run the installed `homelimiter`
+entry point in that venv. No activation is required when you call the full path.
+
+## Profiles and configuration
+
+State defaults to `%LOCALAPPDATA%HomeLimiter` on Windows and
+`~/.local/share/HomeLimiter` on Linux. Set `HOMELIMITER_HOME` or put `--home PATH`
+before the command. `--demo` uses the `demo` subdirectory and never connects to an
+agent. If you choose Demo in the wizard, reopen it with `--demo`.
+
+Run the wizard under **4 Network → Setup wizard**. For monitoring, select an interface
+or all interfaces in explicitly approved CIDRs. Blank CIDRs disable discovery.
+A neighbor cache is incomplete; refresh after devices communicate naturally and
+verify the MAC and addresses before confirming. To connect to an existing agent, supply
+its origin, private token file and trusted CA as appropriate.
+
+Existing v0.1 state and policy IDs are reused. Back up private config and SQLite state
+while the controller is stopped before upgrading. Existing nondefault configurations
+are kept, and setup can be rerun. If configuration cannot load, use `homelimiter check`
+to identify the problem and repair the private `config.json` using
+[the example](../config/controller.example.json). Restore existing restrictions before
+changing the configured adapter or network scope.
+
+## Keep schedules running
+
+In a normal local terminal session, the scheduler checks inventory and policies about
+every 15 seconds while the process is open. Graceful exit requests removal of its live
+rules, retaining saved policies. A running agent restores after the lease expires if
+the controller disappears unexpectedly.
+
+For schedules that should continue when the TUI closes:
+
+```powershell
+# Windows, first terminal:
+.\run.ps1 serve
+# Windows, second terminal:
+.\run.ps1 --connect 8787
 ```
 
-Open http://127.0.0.1:8787, paste the credential, and review the mode indicator.
-`--demo` before the command uses a separate state subdirectory and simulated devices.
-Do not share or commit tokens. The UI keeps the token in memory; reload requires login.
+```bash
+# Linux, first terminal:
+./run.sh serve
+# Linux, second terminal:
+./run.sh --connect 8787
+```
 
-Default state: `%LOCALAPPDATA%\HomeLimiter` on Windows or `~/.local/share/HomeLimiter`
-on Linux. Override with `HOMELIMITER_HOME` or `homelimiter --home PATH ...`.
-Config is `config.json` in that directory. Use `config/controller.example.json` as a
-reference. Add only authorized IPv4/IPv6 CIDRs, then restart and refresh inventory.
-Neighbor caches are incomplete, and no active scan is performed. Review MAC/addresses
-on the device details page before confirming identity. Nicknames and exclusions persist.
+Use the same `--home` and `--demo` options in both commands. If 8787 is occupied,
+use `serve --port PORT` and `--connect PORT`. The API binds to literal loopback,
+and the client reads the profile's private admin credential automatically.
+One controller owns each state directory. Stop it before using local setup or offline
+mutations. `--connect PORT` also works with CLI commands such as `status` and `logs`.
+Closing a connected TUI does not affect the scheduler. Stop the headless process to stop
+renewing leases. No persistent OS service is registered.
 
-The dashboard process runs the persistent scheduler. Run one process per state directory;
-offline CLI commands refuse access while it is running. Use the dashboard/API to manage
-the running service, or stop it before using CLI mutations. A CLI restriction renews a
-remote agent lease once; start the dashboard within the 90-second lease for sustained
-enforcement. Without the controller, the running agent restores traffic after expiry.
+After restart, HomeLimiter evaluates the current time and fresh inventory. Missed events
+are not replayed, and expired rules are excluded. Standalone CLI mutations reconcile once;
+the agent's normal lease expires unless a running controller renews it. If the agent itself
+dies abruptly, restart or [recover it](LINUX_SETUP.md#recovery) using the original state.
 
 ## CLI examples
 
@@ -51,18 +82,14 @@ homelimiter --demo logs
 homelimiter --demo emergency-restore --yes
 ```
 
-Replace the example schedule's target ID before use. `resume` removes every policy for
-the device, including future schedules; `remove POLICY_ID` removes a single policy.
-Use `identify DEVICE_ID --yes --nickname NAME` only after checking its real identity.
+Replace the schedule's target ID before using it outside the demo. `resume` removes
+all rules for the device, including future schedules; `remove POLICY_ID` removes one.
+`emergency-restore` clears saved policies and requests removal of owned rules, reporting
+an error if agent restoration cannot be confirmed.
 
-## Reproducibility
+## Packaging
 
-`requirements-dev.lock` records the exact packages audited in the Windows development
-environment, excluding the editable project itself. It is not a hash-verified multi-OS
-lock. For replay, create a venv, install `-r requirements-dev.lock`, then `-e . --no-deps`.
-For normal installs pip resolves the compatible ranges in pyproject.toml.
-
-Build a wheel with `python -m build`; static assets are packaged inside the wheel.
-Upgrades retain the state directory. Back up config and SQLite while the controller is
-stopped. No daemon, firewall policy, scheduled task, or system service is installed by
-the bootstrap scripts.
+`requirements-dev.lock` records the audited Windows development resolution. It is not
+a hash-verified cross-platform lock. For replay, install that file and then install
+`-e . --no-deps` in a new venv. The normal launcher uses the supported dependency ranges
+in `pyproject.toml`. Build the sdist and wheel with `python -m build`.

@@ -1,29 +1,28 @@
 # Security
 
-Use only explicitly authorized networks. No ARP/NDP spoofing, DNS poisoning, packet
-content capture, covert redirection, endpoint installation, or antivirus evasion.
-No telemetry. The application never configures your router or enables host forwarding.
+Use only explicitly authorized networks. HomeLimiter does not use spoofing, covert
+interception, telemetry, endpoint installation or firewall flushes. It does not
+configure forwarding, routing or your router.
 
-The controller binds to loopback by default, authenticates every administrative API,
-requires same-origin JSON for browser writes, validates Host, and uses a strict content
-security policy. Admin tokens are random, stored outside the repository with restricted
-permissions, and kept in browser memory only. Do not expose the controller to a LAN
-without a reviewed TLS/authentication deployment. Anyone with the token is an admin.
+A standalone terminal session opens no listener. The optional headless API binds to
+127.0.0.1 only, validates the Host and request body, and authenticates every administrative
+operation. Its clients read a private local credential. Anyone with that credential and
+local API access is an administrator. Do not expose the headless port to a LAN or public proxy.
 
-Remote agents require HTTPS with CA verification and a separate bearer token.
-Plain HTTP is permitted only to literal loopback for an SSH tunnel. SSH host verification
-is the operator's responsibility. Tokens must not appear in URLs or command histories.
+The separate agent uses verified HTTPS or literal loopback through a verified SSH
+tunnel. Keep agent tokens in private files; avoid URLs, public logs and command histories.
+Do not reuse the headless credential for an agent.
 
-Disruptive policy creation requires a target-specific confirmation. Targets must have
-fresh, unambiguous identities. Protected hosts cannot receive policies. The agent
-validates allowed CIDRs, exclusions, live neighbor binding, routing and ownership again.
-MAC addresses and IP observations are not cryptographic identities; this is a trusted
-household LAN management tool, not protection against malicious address spoofing.
+Disruptive policy changes require explicit target confirmation. Targets must be
+fresh, unambiguous and confirmed. The agent independently checks protected addresses,
+current neighbor bindings, CIDRs, route and resource ownership. MAC and IP observations
+are not cryptographic identities. A missing or stale binding is not eligible.
 
-Linux enforcement is experimental until the namespace suite is executed on the intended
-kernel. Never run integration tests on the live home network. Start with a disposable
-Linux VM and read [supported capabilities](docs/SUPPORTED_CAPABILITIES.md).
+The routed Linux agent remains experimental. Validate in disposable namespaces and
+review [capabilities](docs/SUPPORTED_CAPABILITIES.md) and [recovery](docs/LINUX_SETUP.md#recovery).
+When the controller cannot renew its lease, the running agent restores after expiry.
+Abrupt agent death requires restart or documented manual recovery.
 
-Report vulnerabilities privately to the repository owner through GitHub's available
-private reporting/contact mechanisms; do not include credentials or household inventory
-in public issues. Review logs before sharing: they contain device IDs and addresses.
+Report vulnerabilities privately to the repository owner. Review logs before sharing:
+they can contain device identifiers and addresses. Do not include tokens or household
+inventory in public issues.

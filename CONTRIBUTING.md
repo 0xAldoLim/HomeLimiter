@@ -1,7 +1,8 @@
 # Contributing
 
-Use Python 3.12+ and an isolated venv. Install `.[dev]`, run `pytest`, `ruff check src tests`,
-and `ruff format --check src tests`. Add behavioral tests for policy/security changes.
+Use Python 3.12+ and an isolated venv. Install `.[dev]`, run `pytest`, `ruff check src tests scripts`,
+`ruff format --check src tests scripts` and the terminal workflow tests. Add behavioral
+tests for policy/security changes.
 No tests may touch a live network. Network namespace tests require explicit opt-in.
 
 Keep capability claims accurate. Do not introduce spoofing, global firewall flushes,
