@@ -1,4 +1,5 @@
 import json
+import sys
 from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
@@ -13,7 +14,9 @@ from .models import DeviceUpdate, PolicyRequest, now
 from .service import Service
 from .store import Store
 
-app = typer.Typer(no_args_is_help=True, help="HomeLimiter: manage only explicitly authorized network paths.")
+app = typer.Typer(
+    invoke_without_command=True, help="HomeLimiter: manage only explicitly authorized network paths."
+)
 
 
 def show(value):
@@ -27,10 +30,22 @@ def options(
     home: Path | None = typer.Option(None, help="State directory (or HOMELIMITER_HOME)."),
 ):
     ctx.obj = {"demo": demo, "root": (home / "demo" if demo else home) if home else state_dir(demo)}
+    if ctx.invoked_subcommand is None:
+        terminal(ctx)
+
+
+def terminal(ctx):
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        typer.echo("Open an interactive terminal, or run 'homelimiter --help' for CLI commands.", err=True)
+        raise typer.Exit(2)
+    from .tui import HomeLimiter
+
+    with session(ctx, refresh=False) as service:
+        HomeLimiter(service).run()
 
 
 @contextmanager
-def session(ctx):
+def session(ctx, *, refresh=True):
     root, demo = ctx.obj["root"], ctx.obj["demo"]
     initialize(root)
     lock = StateLock(root)
@@ -38,7 +53,8 @@ def session(ctx):
     try:
         adapter = make_adapter(load_settings(root, demo))
         service = Service(Store(root / "controller.db"), adapter)
-        service.refresh()
+        if refresh:
+            service.refresh()
         yield service
     except (ValueError, RuntimeError, OSError, KeyError) as exc:
         typer.echo(f"Error: {exc}", err=True)
