@@ -108,7 +108,11 @@ class ReadOnlyAdapter(RouterAdapter):
                 address = ipaddress.ip_address(row.get("dst", "").split("%")[0])
                 if not any(address.version == n.version and address in n for n in networks):
                     continue
-                mac, interface = row.get("lladdr"), row.get("dev", "")
+                # iproute2 can omit "dev" when the command already filters by it.
+                interface = row.get("dev") or self.settings.inventory_interface or ""
+                if self.settings.inventory_interface and interface != self.settings.inventory_interface:
+                    continue
+                mac = row.get("lladdr")
                 if not mac:
                     continue
                 key = hashlib.sha256(f"{interface}:{mac.lower().replace('-', ':')}".encode()).hexdigest()[:20]

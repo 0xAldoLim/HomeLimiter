@@ -94,6 +94,21 @@ def test_monitor_cannot_apply(service):
         service.add_policy(request())
 
 
+def test_interface_scoped_neighbor_cache_supplies_missing_device_name(monkeypatch):
+    def observed(interface):
+        assert interface == "lan0"
+        return [
+            {"dst": "192.0.2.2", "lladdr": "02:00:00:00:00:02", "state": ["PERMANENT"]},
+            {"dst": "192.0.2.3", "lladdr": "02:00:00:00:00:03", "dev": "lan1", "state": ["REACHABLE"]},
+        ]
+
+    monkeypatch.setattr("homelimiter.adapters.neighbors", observed)
+    adapter = ReadOnlyAdapter(Settings(inventory_interface="lan0", authorized_cidrs=["192.0.2.0/24"]))
+    [device] = adapter.discover_devices()
+    assert device.interface == "lan0" and device.status == "online"
+    assert list(map(str, device.addresses)) == ["192.0.2.2"]
+
+
 def test_nickname_and_protection_persist(service):
     service.update_device("demo-2", DeviceUpdate(nickname="Television", protect=True))
     service.refresh()
