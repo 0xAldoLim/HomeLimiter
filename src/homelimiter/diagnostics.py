@@ -12,10 +12,10 @@ from pathlib import Path
 import psutil
 
 
-def run_read(args: list[str]):
+def run_read(args: list[str], accepted=(0,)):
     try:
         proc = subprocess.run(args, capture_output=True, encoding="utf-8", errors="replace", timeout=8)
-        return proc.stdout if proc.returncode == 0 else ""
+        return proc.stdout if proc.returncode in accepted else ""
     except (OSError, subprocess.TimeoutExpired):
         return ""
 
@@ -70,7 +70,7 @@ def diagnose():
     if linux:
         routes = parse(run_read(["ip", "-j", "route", "show", "default"]), [])
         routes6 = parse(run_read(["ip", "-j", "-6", "route", "show", "default"]), [])
-        virtualization = run_read(["systemd-detect-virt"]).strip() or "unknown"
+        virtualization = run_read(["systemd-detect-virt"], accepted=(0, 1)).strip() or "unknown"
         for family, name in {
             "ipv4": "/proc/sys/net/ipv4/ip_forward",
             "ipv6": "/proc/sys/net/ipv6/conf/all/forwarding",

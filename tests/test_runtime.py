@@ -117,7 +117,7 @@ def test_emergency_removes_future_intent_even_if_agent_disconnected(service, mon
         raise AdapterError("Agent connection lost")
 
     monkeypatch.setattr(service.adapter, "reconcile", unavailable)
-    with pytest.raises(AdapterError):
+    with pytest.raises(AdapterError, match="Saved policies cleared"):
         service.emergency()
     assert not service.store.policies()
     assert service.store.logs()[0]["outcome"] == "unverified"

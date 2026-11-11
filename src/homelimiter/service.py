@@ -114,6 +114,15 @@ class Service:
             item.device = self.adapter.policy_target(item.device)
         return [item for item in desired if item.device.addresses or not self.adapter.lease_seconds]
 
+    def target_problem(self, device: Device) -> str | None:
+        if device.protected:
+            return "Protected infrastructure cannot be restricted"
+        if not device.confirmed or device.status != "online":
+            return "Target identity must be confirmed, online and unambiguous"
+        if self.adapter.lease_seconds and not self.adapter.policy_target(device).addresses:
+            return "No fresh eligible routed address is available for this target"
+        return None
+
     def add_policy(self, request: PolicyRequest):
         return self._save_policy(request)
 
@@ -133,10 +142,8 @@ class Service:
     def _save_policy(self, request: PolicyRequest, previous: Policy | None = None):
         with self.lock:
             device = self.device(request.device_id)
-            if device.protected:
-                raise PolicyError("Protected infrastructure cannot be restricted")
-            if not device.confirmed or device.status != "online":
-                raise PolicyError("Target identity must be confirmed, online and unambiguous")
+            if problem := self.target_problem(device):
+                raise PolicyError(problem)
             if request.expires_at and request.expires_at <= now():
                 raise PolicyError("Expiry must be in the future")
             caps = self.capabilities()
@@ -160,8 +167,6 @@ class Service:
                 (request.download_mbps or request.upload_mbps) and not caps.bandwidth
             ):
                 raise PolicyError(caps.reason)
-            if self.adapter.lease_seconds and not self.adapter.policy_target(device).addresses:
-                raise PolicyError("No fresh eligible routed address is available for this target")
             policy = Policy(
                 id=previous.id if previous else uuid.uuid4().hex,
                 created_at=previous.created_at if previous else now(),
@@ -259,11 +264,13 @@ class Service:
             try:
                 # Clear desired intent even if the agent cannot be reached.
                 self.reconcile(force=True)
-            except (OSError, ValueError, RuntimeError):
+            except (OSError, ValueError, RuntimeError) as exc:
                 self.store.audit(
                     "emergency.restore", "unverified", "Desired policies removed; check agent recovery"
                 )
-                raise
+                raise AdapterError(
+                    "Saved policies cleared. Agent restoration could not be verified; check its lease and recovery."
+                ) from exc
             self.store.audit("emergency.restore", "success", "All HomeLimiter desired restrictions removed")
 
     def suspend(self):

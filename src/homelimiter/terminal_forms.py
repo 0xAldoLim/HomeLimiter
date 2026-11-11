@@ -46,7 +46,8 @@ class DeviceDetail(Dialog):
     def compose(self) -> ComposeResult:
         device = self.device
         applied = next((entry for entry in self.view.applied if entry.device.id == device.id), None)
-        eligible = actionable(device)
+        reason = self.view.target_problems.get(device.id)
+        eligible = reason is None
         can_limit, can_pause = self.caps["bandwidth"] and eligible, self.caps["access"] and eligible
         with VerticalScroll(classes="dialog"):
             yield Static(target(device), classes="heading", markup=False)
@@ -82,7 +83,7 @@ class DeviceDetail(Dialog):
                 markup=False,
             )
             if not eligible:
-                yield Static("Restrictions require an online, confirmed, unprotected device.", classes="hint")
+                yield Static(clean(reason), classes="hint", markup=False)
             elif not (can_limit or can_pause):
                 yield Static(clean(self.caps["reason"]), classes="hint", markup=False)
             with Horizontal(classes="buttons"):

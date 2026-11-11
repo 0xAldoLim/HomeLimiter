@@ -29,6 +29,7 @@ class View(Model):
     logs: list[dict]
     schedules: list[ScheduleState]
     settings: dict = Field(default_factory=dict)
+    target_problems: dict[str, str] = Field(default_factory=dict)
     scheduler: str
 
 
@@ -92,14 +93,18 @@ class LocalControl:
         with self.service.lock:
             status = self.service.status()
             policies = self.service.store.policies()
+            devices = self.service.devices()
             return View(
                 status=status,
-                devices=self.service.devices(),
+                devices=devices,
                 policies=policies,
                 applied=self.service.applied if status["acknowledged_devices"] is not None else [],
                 logs=self.service.store.logs(limit=60),
                 schedules=schedule_states(policies),
                 settings=self.public_settings(),
+                target_problems={
+                    device.id: reason for device in devices if (reason := self.service.target_problem(device))
+                },
                 scheduler=self.scheduler,
             )
 

@@ -17,7 +17,7 @@ MODES = [
     ("Demo — isolated simulated devices", "mock"),
     ("Existing authorized gateway agent", "agent"),
     ("Managed Linux gateway — connect a provisioned agent", "gateway"),
-    ("Managed bridge — monitor only", "bridge"),
+    ("Linux bridge — monitor only", "bridge"),
 ]
 
 
@@ -179,7 +179,14 @@ class SetupWizard(Dialog):
     def load_environment(self):
         def loaded(data):
             self.diagnostics = data
-            self.query_one("#environment-result", Static).update(diagnostics_text(data))
+            select = self.query_one("#setup-mode", Select)
+            if not self.control.demo and data["os"] != "Linux" and self.mode != "bridge":
+                select.set_options([item for item in MODES if item[1] != "bridge"])
+                select.value = self.mode
+            status = self.app.snapshot.status["capabilities"]
+            self.query_one("#environment-result", Static).update(
+                f"Current mode: {clean(status['mode'])}\n\n" + diagnostics_text(data)
+            )
             self.show_step(0)
             self.query_one("#setup-next").focus()
 

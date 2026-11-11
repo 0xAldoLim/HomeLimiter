@@ -83,6 +83,9 @@ def test_gateway_projection_never_targets_stale_or_link_local_addresses(service)
     target = gateway.policy_target(device)
     assert list(map(str, target.addresses)) == ["192.0.2.42"]
     assert len(device.addresses) == 3
+    service.adapter = gateway
+    device.address_status["192.0.2.42"] = "unknown"
+    assert "No fresh eligible routed address" in service.target_problem(device)
 
 
 def test_monitor_cannot_apply(service):
