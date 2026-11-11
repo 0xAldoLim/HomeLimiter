@@ -1,21 +1,23 @@
-import asyncio
+"""Authenticated loopback control API for the optional headless runtime."""
+
 import hmac
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .adapters import AdapterError, make_adapter
-from .config import Settings, initialize, load_settings, state_dir
-from .diagnostics import diagnose
-from .locking import StateLock
+from . import __version__
+from .adapters import AdapterError
+from .config import state_dir
+from .control import LocalControl
 from .models import Confirmation, DeviceUpdate, PolicyRequest
+from .runtime import Runtime
 from .security import BodyLimitMiddleware
 from .service import PolicyError, Service
-from .store import Store
 
 WEB = Path(__file__).parent / "web"
 
@@ -27,46 +29,28 @@ def create_app(
     service: Service | None = None,
     token: str | None = None,
     background=True,
+    runtime: Runtime | None = None,
+    legacy_ui=False,
 ):
     root = root or state_dir(demo)
-    token = token or initialize(root)
-    settings = load_settings(root, demo) if service is None else Settings()
-    service = service or Service(Store(root / "controller.db"), make_adapter(settings))
 
     @asynccontextmanager
     async def lifespan(app):
-        lock = StateLock(root)
-        stop = asyncio.Event()
-
-        async def scheduler():
-            while not stop.is_set():
-                await asyncio.to_thread(service.tick)
-                try:
-                    await asyncio.wait_for(stop.wait(), timeout=15)
-                except TimeoutError:
-                    pass
-
-        task = asyncio.create_task(scheduler()) if background else None
-        try:
+        with nullcontext(runtime) if runtime else Runtime(root, demo, service=service, token=token) as active:
+            app.state.runtime = active
+            if background:
+                active.start(headless=True)
             yield
-        finally:
-            if task:
-                stop.set()
-                await task
-            if hasattr(service.adapter, "close"):
-                service.adapter.close()
-            lock.close()
 
     app = FastAPI(
-        title="HomeLimiter",
-        version="0.1.0",
+        title="HomeLimiter controller",
+        version=__version__,
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
     )
-    app.state.service = service
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"])
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     app.add_middleware(BodyLimitMiddleware)
 
     @app.middleware("http")
@@ -97,10 +81,14 @@ def create_app(
         )
         return response
 
-    def admin(request: Request):
+    def control(request: Request) -> LocalControl:
+        active = request.app.state.runtime
         authorization = request.headers.get("authorization", "")
-        if not hmac.compare_digest(authorization.encode(), f"Bearer {token}".encode()):
+        if not hmac.compare_digest(authorization.encode(), f"Bearer {active.token}".encode()):
             raise HTTPException(401, "Admin token required", headers={"WWW-Authenticate": "Bearer"})
+        return active.control
+
+    Control = Annotated[LocalControl, Depends(control)]
 
     for error, status in [(PolicyError, 409), (AdapterError, 503), (KeyError, 404)]:
 
@@ -109,97 +97,102 @@ def create_app(
 
         app.add_exception_handler(error, handler)
 
-    @app.get("/api/status", dependencies=[Depends(admin)])
-    def status():
-        return service.status()
+    @app.get("/api/view")
+    def view(ctrl: Control):
+        return ctrl.view()
 
-    @app.get("/api/devices", dependencies=[Depends(admin)])
-    def devices():
-        return service.devices()
+    @app.post("/api/refresh")
+    def refresh(ctrl: Control):
+        return ctrl.refresh()
 
-    @app.post("/api/discover", dependencies=[Depends(admin)])
-    def discover():
-        result = service.refresh()
-        service.reconcile()
-        return result
+    @app.get("/api/status")
+    def status(ctrl: Control):
+        return ctrl.status()
 
-    @app.get("/api/devices/{identifier}", dependencies=[Depends(admin)])
-    def device(identifier: str):
+    @app.get("/api/devices")
+    def devices(ctrl: Control):
+        return ctrl.devices()
+
+    @app.post("/api/discover")
+    def discover(ctrl: Control):
+        return ctrl.refresh().devices
+
+    @app.get("/api/devices/{identifier}")
+    def device(identifier: str, ctrl: Control):
         return {
-            "device": service.device(identifier),
-            "stats": service.adapter.get_bandwidth_stats(identifier),
-            "policies": [p for p in service.store.policies() if p.device_id == identifier],
+            "device": ctrl.service.device(identifier),
+            "stats": ctrl.service.adapter.get_bandwidth_stats(identifier),
+            "policies": [p for p in ctrl.policies() if p.device_id == identifier],
         }
 
-    @app.patch("/api/devices/{identifier}", dependencies=[Depends(admin)])
-    def edit_device(identifier: str, patch: DeviceUpdate):
-        return service.update_device(identifier, patch)
+    @app.patch("/api/devices/{identifier}")
+    def edit_device(identifier: str, patch: DeviceUpdate, ctrl: Control):
+        return ctrl.update_device(identifier, patch)
 
-    @app.post("/api/devices/{identifier}/resume", dependencies=[Depends(admin)])
-    def resume(identifier: str):
-        service.resume(identifier)
-        return {"restored": True, "simulated": service.adapter.get_capabilities().simulated}
+    @app.post("/api/devices/{identifier}/resume")
+    def resume(identifier: str, ctrl: Control):
+        ctrl.resume(identifier)
+        return {"restored": True, "simulated": ctrl.service.capabilities().simulated}
 
-    @app.get("/api/policies", dependencies=[Depends(admin)])
-    def policies():
-        return service.store.policies()
+    @app.get("/api/policies")
+    def policies(ctrl: Control):
+        return ctrl.policies()
 
-    @app.post("/api/policies", dependencies=[Depends(admin)])
-    def add_policy(request: PolicyRequest):
-        try:
-            return service.add_policy(request)
-        except (PolicyError, AdapterError) as exc:
-            service.store.audit(
-                "policy.create", "refused", {"device_id": request.device_id, "reason": str(exc)}
-            )
-            raise
+    @app.post("/api/policies")
+    def add_policy(request: PolicyRequest, ctrl: Control):
+        return ctrl.save_policy(request)
 
-    @app.delete("/api/policies/{identifier}", dependencies=[Depends(admin)])
-    def delete_policy(identifier: str):
-        service.remove_policy(identifier)
+    @app.put("/api/policies/{identifier}")
+    def edit_policy(identifier: str, request: PolicyRequest, ctrl: Control):
+        return ctrl.save_policy(request, identifier)
+
+    @app.delete("/api/policies/{identifier}")
+    def delete_policy(identifier: str, ctrl: Control):
+        ctrl.remove_policy(identifier)
         return {"removed": True}
 
-    @app.get("/api/schedules", dependencies=[Depends(admin)])
-    def schedules():
-        return [p for p in service.store.policies() if p.window or p.starts_at or p.expires_at]
+    @app.get("/api/schedules")
+    def schedules(ctrl: Control):
+        return [p for p in ctrl.policies() if p.window or p.starts_at or p.expires_at]
 
-    @app.get("/api/adapters", dependencies=[Depends(admin)])
-    def adapters():
+    @app.get("/api/adapters")
+    def adapters(ctrl: Control):
         return {
-            "current": service.adapter.get_capabilities(),
+            "current": ctrl.service.capabilities(),
             "available": ["readonly", "mock", "gateway", "bridge"],
             "bridge": "Monitoring only; enforcement pending validation",
         }
 
-    @app.get("/api/diagnostics", dependencies=[Depends(admin)])
-    def diagnostics():
-        return diagnose()
+    @app.get("/api/diagnostics")
+    def diagnostics(ctrl: Control):
+        return ctrl.diagnostics()
 
-    @app.get("/api/logs", dependencies=[Depends(admin)])
-    def logs():
-        return service.store.logs()
+    @app.get("/api/logs")
+    def logs(ctrl: Control):
+        return ctrl.logs()
 
-    @app.get("/api/settings", dependencies=[Depends(admin)])
-    def public_settings():
+    @app.get("/api/settings")
+    def settings(ctrl: Control):
         return {
-            "adapter": service.adapter.get_capabilities().adapter,
-            "authorized_cidrs": settings.authorized_cidrs,
-            "protected_addresses": settings.protected_addresses,
+            **ctrl.public_settings(),
+            "adapter": ctrl.service.capabilities().adapter,
             "binding": "loopback",
             "telemetry": False,
-            "configuration": "Edit config.json in the state directory and restart. Secrets are never returned.",
+            "configuration": "Use the local setup wizard with the headless controller stopped.",
         }
 
-    @app.post("/api/emergency", dependencies=[Depends(admin)])
-    def emergency(request: Confirmation):
+    @app.post("/api/emergency")
+    def emergency(request: Confirmation, ctrl: Control):
         if not request.confirm:
             raise PolicyError("Confirm emergency restoration")
-        service.emergency()
+        ctrl.emergency()
         return {"restored": True}
 
-    @app.get("/")
-    def index():
-        return FileResponse(WEB / "index.html")
+    if legacy_ui:
 
-    app.mount("/static", StaticFiles(directory=WEB), name="static")
+        @app.get("/")
+        def index():
+            return FileResponse(WEB / "index.html")
+
+        app.mount("/static", StaticFiles(directory=WEB), name="static")
     return app

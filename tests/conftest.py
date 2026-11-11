@@ -17,6 +17,6 @@ def service(tmp_path):
 def client(service, tmp_path):
     from fastapi.testclient import TestClient
 
-    app = create_app(tmp_path, service=service, token="x" * 43, background=False)
+    app = create_app(tmp_path, service=service, token="x" * 43, background=False, legacy_ui=True)
     with TestClient(app, headers={"Authorization": "Bearer " + "x" * 43}) as client:
         yield client

@@ -414,7 +414,8 @@ class LinuxEngine:
             self.preflight()
             self.validate_targets(snapshot.policies)
             previous = [p.model_copy(deep=True) for p in self.policies]
-            self._save_journal()
+            if not self.journal.exists():
+                self._save_journal()
             if snapshot_key(previous) != snapshot_key(snapshot.policies) or not self._installed(
                 snapshot.policies
             ):

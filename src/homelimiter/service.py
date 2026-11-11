@@ -209,7 +209,7 @@ class Service:
             fingerprint = snapshot_key(desired)
             changed = fingerprint != self.last_applied
             try:
-                if force or changed or self.adapter.lease_seconds:
+                if force or changed or (self.adapter.lease_seconds and (desired or self.live_attempted)):
                     # Start measuring before the request: this never overstates the remaining lease.
                     started = time.monotonic()
                     self.live_attempted |= bool(desired and self.adapter.lease_seconds)

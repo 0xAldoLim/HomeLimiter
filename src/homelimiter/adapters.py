@@ -9,7 +9,7 @@ import httpx
 import psutil
 from pydantic import ValidationError
 
-from .config import Settings
+from .config import Settings, read_token
 from .diagnostics import neighbors
 from .models import Capabilities, Device, Effective, Mode, Snapshot
 
@@ -189,9 +189,7 @@ class LinuxGatewayAdapter(RouterAdapter):
     def __init__(self, settings: Settings):
         self.settings = settings
         context = ssl.create_default_context(cafile=settings.agent_ca_file)
-        token = Path(settings.agent_token_file).read_text(encoding="utf-8").strip()
-        if len(token) < 32:
-            raise ValueError("Agent token must be at least 32 characters")
+        token = read_token(Path(settings.agent_token_file))
         self.client = httpx.Client(
             base_url=settings.agent_url,
             verify=context,

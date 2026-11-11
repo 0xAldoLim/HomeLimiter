@@ -8,7 +8,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from pydantic import ValidationError
 
+from .adapters import AdapterError
 from .config import initialize
 from .kernel import AgentConfig, LinuxEngine
 from .locking import StateLock
@@ -60,7 +62,8 @@ def create_agent(engine: LinuxEngine, token: str):
 
     @app.get("/v1/capabilities", dependencies=[Depends(admin)])
     def capabilities():
-        return engine.capabilities()
+        with engine.lock:
+            return engine.capabilities()
 
     @app.get("/v1/devices", dependencies=[Depends(admin)])
     def devices():
@@ -73,8 +76,6 @@ def create_agent(engine: LinuxEngine, token: str):
 
     @app.put("/v1/policies", dependencies=[Depends(admin)])
     def apply(snapshot: Snapshot):
-        from .adapters import AdapterError
-
         try:
             result = engine.apply(snapshot)
             log.info(
@@ -106,23 +107,30 @@ def main():
         "--recover", action="store_true", help="Remove only journal-owned HomeLimiter resources and exit"
     )
     args = parser.parse_args()
-    config = AgentConfig.model_validate_json(args.config.read_text(encoding="utf-8"))
-    token = initialize(args.state)
-    engine = LinuxEngine(config, args.state)
-    if args.recover:
-        lock = StateLock(args.state)
-        try:
-            engine.recover()
-        finally:
-            lock.close()
-        return
-    if args.host not in {"127.0.0.1", "::1"} and not (args.tls_cert and args.tls_key):
+    if not args.recover and args.host not in {"127.0.0.1", "::1"} and not (args.tls_cert and args.tls_key):
         parser.error("Non-loopback binding requires TLS certificate and key")
+    try:
+        config = AgentConfig.model_validate_json(args.config.read_text(encoding="utf-8"))
+        token = initialize(args.state)
+        if args.recover:
+            lock = StateLock(args.state)
+            try:
+                LinuxEngine(config, args.state).recover()
+            finally:
+                lock.close()
+            return
+        engine = LinuxEngine(config, args.state)
+    except ValidationError as exc:
+        parser.error(exc.errors(include_input=False, include_url=False)[0]["msg"])
+    except (OSError, ValueError, RuntimeError) as exc:
+        parser.error(str(exc))
     uvicorn.run(
         create_agent(engine, token),
         host=args.host,
         port=args.port,
         access_log=False,
+        proxy_headers=False,
+        ws="none",
         ssl_certfile=str(args.tls_cert) if args.tls_cert else None,
         ssl_keyfile=str(args.tls_key) if args.tls_key else None,
     )

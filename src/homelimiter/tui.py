@@ -12,7 +12,7 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.theme import Theme
 from textual.widgets import Button, DataTable, Footer, Input, Select, Static, TabbedContent, TabPane
 
-from .control import LocalControl, View
+from .control import LocalControl, RemoteControl, View
 from .models import Device
 from .onboarding import SetupWizard, diagnostics_text
 from .terminal_forms import DeviceDetail, PolicyOptions, device_state, policy_description
@@ -72,7 +72,7 @@ class HomeLimiter(App):
     .short-table { height: 8; }
     """
 
-    def __init__(self, control: LocalControl, *, poll_interval: float = 15):
+    def __init__(self, control: LocalControl | RemoteControl, *, poll_interval: float = 15):
         super().__init__()
         self.register_theme(CONSOLE)
         self.theme = CONSOLE.name
@@ -139,7 +139,7 @@ class HomeLimiter(App):
         self.widget("#schedule-table", DataTable).add_columns(
             "Policy / device", "Rule", "Window", "Next change"
         )
-        self.submit(self.control.refresh, self.initial_view)
+        self.submit(self.control.view, self.initial_view)
         if self.poll_interval:
             self.set_interval(self.poll_interval, self.poll)
 
@@ -149,8 +149,8 @@ class HomeLimiter(App):
             self.push_screen(SetupWizard(self.control))
 
     def poll(self):
-        if len(self.screen_stack) == 1:
-            self.action_refresh()
+        if len(self.screen_stack) == 1 and not self.busy:
+            self.submit(self.control.view, self.render_view)
 
     def action_section(self, section: str):
         self.widget("#sections", TabbedContent).active = section
@@ -242,7 +242,7 @@ class HomeLimiter(App):
             f"Scheduler     {clean(view.scheduler)}\n"
             f"Last tick     {clean((status['last_reconciled'] or 'Pending').replace('T', ' '))}\n"
             + (
-                f"Lease         Up to {lease} seconds since last acknowledgement\n"
+                f"Lease         ~{lease} seconds remaining after last acknowledgement\n"
                 if lease is not None
                 else ""
             )

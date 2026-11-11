@@ -1,11 +1,14 @@
 """Shared presentation-facing controller operations."""
 
 from pathlib import Path
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
+import httpx
 from pydantic import Field
 
 from .adapters import make_adapter
-from .config import Settings, save_settings
+from .config import Settings, read_token, save_settings
 from .diagnostics import diagnose
 from .models import Device, DeviceUpdate, Effective, Model, Policy, PolicyRequest, now
 from .scheduling import active, next_change
@@ -40,8 +43,6 @@ def schedule_states(policies: list[Policy]):
         if transition:
             moment, starting = transition
             zone = policy.window.timezone if policy.window else "UTC"
-            from zoneinfo import ZoneInfo
-
             upcoming = (
                 f"{'Starts' if starting else 'Ends'} {moment.astimezone(ZoneInfo(zone)):%d %b %H:%M %Z}"
             )
@@ -74,6 +75,18 @@ class LocalControl:
         return self.settings.model_dump(
             mode="json", exclude={"agent_token_file", "agent_url", "agent_ca_file"}
         )
+
+    def status(self):
+        return {**self.service.status(), "scheduler": self.scheduler}
+
+    def devices(self):
+        return self.service.devices()
+
+    def policies(self):
+        return self.service.store.policies()
+
+    def logs(self):
+        return self.service.store.logs()
 
     def view(self):
         with self.service.lock:
@@ -170,3 +183,94 @@ class LocalControl:
                 self.service.update_device(identifier, patch)
             self.service.store.audit("setup", "success", {"adapter": settings.adapter})
         return self.refresh()
+
+
+class RemoteControl:
+    """Access a running controller on an explicitly selected local port."""
+
+    can_configure = False
+    needs_setup = False
+
+    def __init__(self, root: Path, port: int):
+        try:
+            token = read_token(root / "admin.token")
+        except FileNotFoundError as exc:
+            raise PolicyError(
+                "Start the headless controller with the same --home and --demo options."
+            ) from exc
+        self.client = httpx.Client(
+            base_url=f"http://127.0.0.1:{port}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=60,
+            follow_redirects=False,
+            trust_env=False,
+        )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.client.close()
+
+    def request(self, method, path, data=None):
+        try:
+            response = self.client.request(method, f"/api/{path}", json=data)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                raise PolicyError("Headless credential rejected. Check --home and --demo.") from exc
+            try:
+                detail = exc.response.json().get("detail")
+            except (ValueError, AttributeError):
+                detail = None
+            raise PolicyError(
+                detail
+                if isinstance(detail, str)
+                else f"Headless controller returned HTTP {exc.response.status_code}."
+            ) from exc
+        except (httpx.RequestError, ValueError) as exc:
+            raise PolicyError(
+                "Cannot reach the headless controller. Check the port and that 'homelimiter serve' is running."
+            ) from exc
+
+    def view(self):
+        return View.model_validate(self.request("GET", "view"))
+
+    def refresh(self):
+        return View.model_validate(self.request("POST", "refresh", {}))
+
+    def status(self):
+        return self.request("GET", "status")
+
+    def devices(self):
+        return [Device.model_validate(item) for item in self.request("GET", "devices")]
+
+    def policies(self):
+        return [Policy.model_validate(item) for item in self.request("GET", "policies")]
+
+    def logs(self):
+        return self.request("GET", "logs")
+
+    def diagnostics(self):
+        return self.request("GET", "diagnostics")
+
+    def update_device(self, identifier: str, patch: DeviceUpdate):
+        return Device.model_validate(
+            self.request("PATCH", f"devices/{quote(identifier, safe='')}", patch.model_dump(mode="json"))
+        )
+
+    def save_policy(self, request: PolicyRequest, identifier: str | None = None):
+        method, path = (
+            ("PUT", f"policies/{quote(identifier, safe='')}") if identifier else ("POST", "policies")
+        )
+        return self.request(method, path, request.model_dump(mode="json"))
+
+    def remove_policy(self, identifier):
+        return self.request("DELETE", f"policies/{quote(identifier, safe='')}", {})
+
+    def resume(self, identifier):
+        return self.request("POST", f"devices/{quote(identifier, safe='')}/resume", {})
+
+    def emergency(self):
+        return self.request("POST", "emergency", {"confirm": True})
