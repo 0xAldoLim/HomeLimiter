@@ -21,6 +21,14 @@ class AdapterError(RuntimeError):
 class RouterAdapter(ABC):
     """Brand-independent interface; mutations replace a complete desired snapshot."""
 
+    lease_seconds = 0
+
+    def policy_target(self, device: Device) -> Device:
+        return device
+
+    def close(self):  # noqa: B027 - most adapters have no resources to release
+        """Release adapter resources, if any."""
+
     @abstractmethod
     def discover_devices(self) -> list[Device]: ...
 
@@ -94,7 +102,8 @@ class ReadOnlyAdapter(RouterAdapter):
             return []
         own = {a.address.split("%")[0] for addresses in psutil.net_if_addrs().values() for a in addresses}
         grouped: dict[str, Device] = {}
-        for row in neighbors():
+        protected = {str(ipaddress.ip_address(address)) for address in self.settings.protected_addresses}
+        for row in neighbors(self.settings.inventory_interface):
             try:
                 address = ipaddress.ip_address(row.get("dst", "").split("%")[0])
                 if not any(address.version == n.version and address in n for n in networks):
@@ -103,18 +112,25 @@ class ReadOnlyAdapter(RouterAdapter):
                 if not mac:
                     continue
                 key = hashlib.sha256(f"{interface}:{mac.lower().replace('-', ':')}".encode()).hexdigest()[:20]
-                states = {str(s).upper() for s in row.get("state", [])}
+                raw_states = row.get("state", [])
+                states = {
+                    str(s).upper() for s in ([raw_states] if isinstance(raw_states, str) else raw_states)
+                }
                 device = grouped.setdefault(
                     key, Device(id=key, mac=mac, interface=interface, source="neighbor-cache")
                 )
                 if address not in device.addresses:
+                    if len(device.addresses) >= 64:
+                        # Preserve protection even if this identity has too many addresses to inventory.
+                        device.protected |= str(address) in own or str(address) in protected
+                        continue
                     device.addresses.append(address)
                 if states & {"REACHABLE", "PERMANENT", "5", "6"}:
                     device.status = "online"
                     device.address_status[str(address)] = "online"
                 else:
                     device.address_status[str(address)] = "unknown"
-                device.protected |= str(address) in own or str(address) in self.settings.protected_addresses
+                device.protected |= str(address) in own or str(address) in protected
             except (ValueError, ValidationError):
                 continue
         return list(grouped.values())
@@ -168,6 +184,8 @@ class MockAdapter(RouterAdapter):
 
 
 class LinuxGatewayAdapter(RouterAdapter):
+    lease_seconds = 90
+
     def __init__(self, settings: Settings):
         self.settings = settings
         context = ssl.create_default_context(cafile=settings.agent_ca_file)
@@ -188,6 +206,17 @@ class LinuxGatewayAdapter(RouterAdapter):
             response = self.client.request(method, path, json=data)
             response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 409:
+                try:
+                    detail = exc.response.json().get("detail")
+                    if isinstance(detail, str):
+                        raise AdapterError(f"Agent refused the snapshot: {detail[:500]}") from exc
+                except (ValueError, AttributeError):
+                    pass
+            raise AdapterError(
+                f"Agent returned HTTP {exc.response.status_code}; check its configuration and credential"
+            ) from exc
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             raise AdapterError(
                 f"Agent request failed ({type(exc).__name__}); inspect agent diagnostics"
@@ -200,11 +229,31 @@ class LinuxGatewayAdapter(RouterAdapter):
             return Capabilities(adapter="gateway", mode=Mode.MONITOR, reason=str(exc))
 
     def discover_devices(self):
-        return [Device.model_validate(item) for item in self._call("GET", "/v1/devices")]
+        data = self._call("GET", "/v1/devices")
+        if not isinstance(data, list):
+            raise AdapterError("Agent returned invalid inventory")
+        return [Device.model_validate(item) for item in data]
+
+    def policy_target(self, device: Device) -> Device:
+        addresses = [
+            address
+            for address in device.addresses
+            if device.address_status.get(str(address)) == "online"
+            and not (
+                address.is_link_local or address.is_multicast or address.is_loopback or address.is_unspecified
+            )
+        ]
+        return device.model_copy(
+            update={
+                "addresses": addresses,
+                "address_status": {str(address): "online" for address in addresses},
+            }
+        )
 
     def reconcile(self, policies):
-        result = self._call("PUT", "/v1/policies", Snapshot(policies=policies).model_dump(mode="json"))
-        if result.get("installed") is not True:
+        snapshot = Snapshot(policies=policies, lease_seconds=self.lease_seconds)
+        result = self._call("PUT", "/v1/policies", snapshot.model_dump(mode="json"))
+        if not isinstance(result, dict) or result.get("installed") is not True:
             raise AdapterError("Agent did not acknowledge installed desired state")
 
     def get_active_policies(self):

@@ -143,5 +143,21 @@ class Snapshot(Model):
     lease_seconds: int = Field(default=90, ge=15, le=300)
 
 
+def snapshot_key(policies: list[Effective]) -> tuple:
+    """Ignore presentation and observation metadata when checking installed state."""
+    return tuple(
+        (
+            item.device.id,
+            item.device.interface,
+            item.device.mac,
+            tuple(sorted(map(str, item.device.addresses))),
+            item.blocked,
+            item.download_mbps,
+            item.upload_mbps,
+        )
+        for item in sorted(policies, key=lambda p: p.device.id)
+    )
+
+
 class Confirmation(Model):
     confirm: bool = False

@@ -38,10 +38,17 @@ def terminal(ctx):
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         typer.echo("Open an interactive terminal, or run 'homelimiter --help' for CLI commands.", err=True)
         raise typer.Exit(2)
+    from .control import LocalControl
     from .tui import HomeLimiter
 
-    with session(ctx, refresh=False) as service:
-        HomeLimiter(service).run()
+    while True:
+        with session(ctx, refresh=False) as service:
+            root, demo = ctx.obj["root"], ctx.obj["demo"]
+            console = HomeLimiter(LocalControl(service, load_settings(root, demo), root))
+            console.run()
+        if not console.demo_requested:
+            break
+        ctx.obj = {"root": root / "demo", "demo": True}
 
 
 @contextmanager

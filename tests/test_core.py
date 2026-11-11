@@ -3,10 +3,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from homelimiter.adapters import AdapterError, ReadOnlyAdapter
+from homelimiter.adapters import AdapterError, LinuxGatewayAdapter, ReadOnlyAdapter
 from homelimiter.config import Settings
 from homelimiter.models import DeviceUpdate, Policy, PolicyRequest, Window, now
-from homelimiter.scheduling import active
+from homelimiter.scheduling import active, next_change
 from homelimiter.service import PolicyError, Service
 
 
@@ -59,6 +59,32 @@ def test_failed_application_rolls_back_database(service, monkeypatch):
     assert not service.adapter.get_active_policies()[0].blocked
 
 
+def test_failed_removal_reinstalls_previous_snapshot(service, monkeypatch):
+    identifier = service.add_policy(request())["policy"]["id"]
+    original = service.adapter.reconcile
+
+    def lose_ack(policies):
+        original(policies)
+        if not policies:
+            raise AdapterError("lost acknowledgement after clear")
+
+    monkeypatch.setattr(service.adapter, "reconcile", lose_ack)
+    with pytest.raises(AdapterError, match="lost acknowledgement"):
+        service.remove_policy(identifier)
+    assert service.policy(identifier).download_mbps == 2
+    assert service.adapter.get_active_policies()[0].download_mbps == 2
+
+
+def test_gateway_projection_never_targets_stale_or_link_local_addresses(service):
+    device = service.device("demo-2")
+    device.addresses = ["192.0.2.42", "2001:db8::2", "fe80::2"]
+    device.address_status = {"192.0.2.42": "online", "2001:db8::2": "unknown", "fe80::2": "online"}
+    gateway = LinuxGatewayAdapter.__new__(LinuxGatewayAdapter)
+    target = gateway.policy_target(device)
+    assert list(map(str, target.addresses)) == ["192.0.2.42"]
+    assert len(device.addresses) == 3
+
+
 def test_monitor_cannot_apply(service):
     service.adapter = ReadOnlyAdapter(Settings())
     with pytest.raises(PolicyError, match="Passive"):
@@ -107,6 +133,17 @@ def test_dst_fall_back_both_folds():
     )
     for hour in (5, 6):
         assert active(policy, datetime(2026, 11, 1, hour, 30, tzinfo=UTC))
+
+
+def test_next_change_uses_dst_gap_transition():
+    policy = Policy(
+        id="p",
+        device_id="d",
+        blocked=True,
+        window=Window(timezone="America/New_York", weekdays=[6], start="02:30", end="04:00"),
+    )
+    instant = datetime(2026, 3, 8, 6, tzinfo=UTC)
+    assert next_change(policy, instant) == (datetime(2026, 3, 8, 7, tzinfo=UTC), True)
 
 
 @pytest.mark.parametrize(

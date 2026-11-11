@@ -2,6 +2,7 @@ import json
 import os
 import secrets
 import subprocess
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -12,6 +13,8 @@ from .models import Model
 
 class Settings(Model):
     adapter: str = "readonly"
+    onboarded: bool = False
+    inventory_interface: str | None = None
     agent_url: str | None = None
     agent_token_file: str | None = None
     agent_ca_file: str | None = None
@@ -28,7 +31,7 @@ class Settings(Model):
             ipaddress.ip_network(network, strict=True)
         for address in self.protected_addresses:
             ipaddress.ip_address(address)
-        if self.adapter in {"gateway", "bridge"} and not self.agent_url:
+        if self.adapter == "gateway" and not self.agent_url:
             raise ValueError("An agent URL is required")
         if self.agent_url:
             parts = urlsplit(self.agent_url)
@@ -97,4 +100,20 @@ def load_settings(root: Path, demo=False) -> Settings:
     settings = (
         Settings.model_validate(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else Settings()
     )
-    return settings.model_copy(update={"adapter": "mock"}) if demo else settings
+    if demo:
+        return Settings(adapter="mock", onboarded=settings.onboarded)
+    if settings.adapter == "mock":
+        raise ValueError("Run with --demo to use the isolated simulation profile")
+    return settings
+
+
+def save_settings(root: Path, settings: Settings):
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=root, mode="w", encoding="utf-8", delete=False) as file:
+            temporary = Path(file.name)
+            file.write(settings.model_dump_json(indent=2) + "\n")
+        temporary.replace(root / "config.json")
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

@@ -1,6 +1,5 @@
 """Opt-in Linux gateway executor. Never used by the Windows controller."""
 
-import hashlib
 import ipaddress
 import json
 import os
@@ -17,7 +16,7 @@ from pydantic import Field, field_validator, model_validator
 
 from .adapters import AdapterError, ReadOnlyAdapter
 from .config import Settings
-from .models import Capabilities, Effective, Mode, Model, Snapshot
+from .models import Capabilities, Effective, Mode, Model, Snapshot, snapshot_key
 
 TABLE = "homelimiter"
 ROOT = "1a10:"
@@ -190,6 +189,7 @@ class LinuxEngine:
             Settings(
                 authorized_cidrs=self.config.authorized_cidrs,
                 protected_addresses=self.config.protected_addresses,
+                inventory_interface=self.config.lan,
             )
         )
         return [device for device in adapter.discover_devices() if device.interface == self.config.lan]
@@ -201,7 +201,10 @@ class LinuxEngine:
             for row in self.runner.json(["ip", "-j", "address", "show"])
             for a in row.get("addr_info", [])
         }
-        protected = local_addresses | set(self.config.protected_addresses)
+        protected = {
+            str(ipaddress.ip_address(value))
+            for value in local_addresses | set(self.config.protected_addresses)
+        }
         cidrs = [ipaddress.ip_network(n) for n in self.config.authorized_cidrs]
         bindings = {}
         for observed in inventory:
@@ -238,6 +241,7 @@ class LinuxEngine:
                 if (
                     len(observed) != 1
                     or observed[0].mac != device.mac
+                    or observed[0].protected
                     or observed[0].status != "online"
                     or observed[0].address_status.get(str(address)) != "online"
                 ):
@@ -410,20 +414,10 @@ class LinuxEngine:
             self.preflight()
             self.validate_targets(snapshot.policies)
             previous = [p.model_copy(deep=True) for p in self.policies]
-            old_key = hashlib.sha256(
-                json.dumps(
-                    [p.model_dump(mode="json", exclude={"device": {"last_seen"}}) for p in previous],
-                    sort_keys=True,
-                ).encode()
-            ).hexdigest()
-            new_key = hashlib.sha256(
-                json.dumps(
-                    [p.model_dump(mode="json", exclude={"device": {"last_seen"}}) for p in snapshot.policies],
-                    sort_keys=True,
-                ).encode()
-            ).hexdigest()
             self._save_journal()
-            if old_key != new_key or not self._installed(snapshot.policies):
+            if snapshot_key(previous) != snapshot_key(snapshot.policies) or not self._installed(
+                snapshot.policies
+            ):
                 try:
                     self._install(snapshot.policies)
                 except Exception as exc:

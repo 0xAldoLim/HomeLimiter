@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -39,10 +40,13 @@ class Store:
             ]
 
     def save_device(self, device: Device):
+        self.save_devices([device])
+
+    def save_devices(self, devices: list[Device]):
         with self.connection() as db:
-            db.execute(
+            db.executemany(
                 "INSERT INTO devices VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
-                (device.id, device.model_dump_json()),
+                [(device.id, device.model_dump_json()) for device in devices],
             )
 
     def policies(self) -> list[Policy]:
@@ -52,15 +56,18 @@ class Store:
             ]
 
     def save_policy(self, policy: Policy):
+        self.change_policies(save=[policy])
+
+    def change_policies(self, *, save: Sequence[Policy] = (), delete: Sequence[str] = ()):
         with self.connection() as db:
-            db.execute(
+            db.executemany("DELETE FROM policies WHERE id=?", [(identifier,) for identifier in delete])
+            db.executemany(
                 "INSERT INTO policies VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
-                (policy.id, policy.model_dump_json()),
+                [(policy.id, policy.model_dump_json()) for policy in save],
             )
 
     def delete_policy(self, policy_id: str):
-        with self.connection() as db:
-            db.execute("DELETE FROM policies WHERE id=?", (policy_id,))
+        self.change_policies(delete=[policy_id])
 
     def audit(self, action: str, outcome: str, detail: dict | str):
         with self.connection() as db:
